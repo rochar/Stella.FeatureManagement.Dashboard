@@ -1,0 +1,87 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+  actions: write
+  id-token: write  
+  checks: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for GitVersion
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: '10.0.x'
+    
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v4.0.0
+      with:
+        versionSpec: '6.x'
+    
+    - name: Determine and update version
+      id: gitversion
+      uses: gittools/actions/gitversion/execute@v4.0.0
+      with:
+        updateprojectfiles: true
+    
+    - name: Display Version
+      run: |
+        echo "SemVer: ${{ steps.gitversion.outputs.semVer }}"
+        echo "NuGetVersion: ${{ steps.gitversion.outputs.nuGetVersion }}"
+        echo "AssemblySemVer: ${{ steps.gitversion.outputs.assemblySemVer }}"
+    
+    - name: Restore dependencies
+      run: dotnet restore
+    
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+    
+    - name: Test
+      run: dotnet test --no-build --configuration Release -- --report-trx --report-trx-filename test-results.trx --results-directory "../artifacts"
+
+    - name: Pack
+      run: dotnet pack --no-build --configuration Release --output ./artifacts
+    
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: nuget-packages
+        path: ./artifacts/*.nupkg
+        retention-days: 2
+    
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: ./artifacts/*.trx 
+
+    - name: Publish test results to GitHub
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+          name: test-publish
+          path: ./artifacts/*.trx 
+          reporter: dotnet-trx
+
+  # publish:
+  #   needs: build
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   uses: ./.github/workflows/publish.yml
+  #   secrets: inherit
