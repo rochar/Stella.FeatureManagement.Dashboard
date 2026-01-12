@@ -19,6 +19,10 @@ public class EndPointTests(WebApplicationFactory<Program> factory) : IClassFixtu
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        content.ShouldBe(isEnabled.ToString().ToLowerInvariant());
+
+        if (bool.TryParse(content, out var result))
+            result.ShouldBe(isEnabled);
+        else
+            Assert.Fail($"Content response is not a boolean {content}");
     }
 }

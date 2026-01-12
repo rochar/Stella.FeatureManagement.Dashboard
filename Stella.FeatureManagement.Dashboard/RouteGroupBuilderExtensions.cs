@@ -19,7 +19,7 @@ public static class RouteGroupBuilderExtensions
         routeGroupBuilder.MapGet("{featureName}", async (string featureName, IFeatureManager featureManager) =>
         {
             var isEnabled = await featureManager.IsEnabledAsync(featureName);
-            return new { FeatureName = featureName, IsEnabled = isEnabled };
+            return isEnabled;
         });
         return routeGroupBuilder;
     }
