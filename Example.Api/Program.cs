@@ -23,9 +23,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-
-app.MapGroup("/features")
-    .UseDashboard();
+app.UseDashboard("/features");
 
 app.Run();
 

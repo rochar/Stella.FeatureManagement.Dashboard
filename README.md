@@ -43,8 +43,8 @@ builder.Services.AddFeatureManagement()
 var app = builder.Build();
 
 // Map the dashboard endpoints
-app.MapGroup("/features")
-    .UseDashboard();
+app.UseDashboard();
+    
 
 app.Run();
 ```
