@@ -80,8 +80,8 @@ jobs:
           path: ./artifacts/*.trx 
           reporter: dotnet-trx
 
-  # publish:
-  #   needs: build
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   uses: ./.github/workflows/publish.yml
-  #   secrets: inherit
+  publish:
+     needs: build
+     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+     uses: ./.github/workflows/publish.yml
+     secrets: inherit

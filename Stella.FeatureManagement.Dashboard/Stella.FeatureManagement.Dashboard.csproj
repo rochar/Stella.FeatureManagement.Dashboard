@@ -8,7 +8,7 @@
     <IsPackable>true</IsPackable>
     <Authors>Stella.Apps</Authors>
     <Copyright>Copyright © 2025 Stella.Apps</Copyright>
-    <Description>Adds a ready-to-use web dashboard to ASP.NET Core applications for managing feature flags powered by Microsoft.FeatureManagement. It provides a secured React-based SPA, embedded and served as a static resource, together with REST APIs to view, enable, disable, and configure feature flags at runtime</Description>
+    <Description>Adds a ready-to-use web dashboard to ASP.NET Core applications for managing feature flags powered by Microsoft.FeatureManagement.  It provides a REST APIs to view, enable, disable, and configure feature flags at runtime</Description>
     <PackageTags>feature-management;dashboard;asp-net-core;feature-flags;microsoft-featuremanagement</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>

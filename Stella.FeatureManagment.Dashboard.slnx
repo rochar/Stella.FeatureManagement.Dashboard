@@ -1,6 +1,0 @@
-
-<Solution>
-  <Project Path="Example.Api/Example.Api.csproj" />
-  <Project Path="Stella.FeatureManagment.Dashboard.Tests/Stella.FeatureManagment.Dashboard.Tests.csproj" />
-  <Project Path="Stella.FeatureManagment.Dashboard/Stella.FeatureManagment.Dashboard.csproj" />
-</Solution>
