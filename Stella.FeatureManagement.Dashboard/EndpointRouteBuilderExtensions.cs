@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.FeatureManagement;
 
@@ -17,11 +18,28 @@ public static class EndpointRouteBuilderExtensions
     /// <returns>The <see cref="IEndpointRouteBuilder"/> so that additional calls can be chained.</returns>
     public static IEndpointRouteBuilder UseDashboard(this IEndpointRouteBuilder routeBuilder, string group = "/features")
     {
-        routeBuilder.MapGroup(group).MapGet("{featureName}", async (string featureName, IFeatureManager featureManager) =>
+        var routeGroup = routeBuilder.MapGroup(group);
+
+        routeGroup.MapGet("", async (IFeatureManager featureManager) =>
+        {
+            var features = new List<FeatureState>();
+            await foreach (var featureName in featureManager.GetFeatureNamesAsync())
+            {
+                var isEnabled = await featureManager.IsEnabledAsync(featureName);
+                features.Add(new FeatureState(featureName, isEnabled));
+            }
+
+            return features;
+        }).Produces<List<FeatureState>>(200);
+
+        routeGroup.MapGet("{featureName}", async (string featureName, IFeatureManager featureManager) =>
         {
             var isEnabled = await featureManager.IsEnabledAsync(featureName);
             return isEnabled;
-        });
+        }).Produces<bool>(200);
+
         return routeBuilder;
     }
+
+    private record FeatureState(string FeatureName, bool IsEnabled);
 }
