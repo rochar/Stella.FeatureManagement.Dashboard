@@ -8,6 +8,12 @@
 		},
 		{
 			"path": "../Stella.FeatureManagement.Dashboard"
+		},
+		{
+			"path": "../Example.AppHost"
+		},
+		{
+			"path": "../Example.ServiceDefaults"
 		}
 	],
 	"settings": {}

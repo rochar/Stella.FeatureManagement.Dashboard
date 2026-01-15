@@ -21,7 +21,11 @@ public static class EndpointRouteBuilderExtensions
     /// <returns>The <see cref="IEndpointRouteBuilder"/> so that additional calls can be chained.</returns>
     public static IEndpointRouteBuilder UseDashboard(this IEndpointRouteBuilder routeBuilder, string group = "/features")
     {
-        var routeGroup = routeBuilder.MapGroup(group);
+        var routeGroup = routeBuilder.MapGroup(group)
+            .RequireCors(policy => policy
+                .AllowAnyOrigin()
+                .AllowAnyMethod()
+                .AllowAnyHeader());
 
         // Serve React SPA from embedded files
         var embeddedProvider = new ManifestEmbeddedFileProvider(

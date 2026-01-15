@@ -1,6 +1,8 @@
 
 <Solution>
   <Project Path="Example.Api/Example.Api.csproj" />
+  <Project Path="Example.AppHost/Example.AppHost.csproj" />
+  <Project Path="Example.ServiceDefaults/Example.ServiceDefaults.csproj" />
   <Project Path="Stella.FeatureManagement.Dashboard.Tests/Stella.FeatureManagement.Dashboard.Tests.csproj" />
   <Project Path="Stella.FeatureManagement.Dashboard/Stella.FeatureManagement.Dashboard.csproj" />
 </Solution>
