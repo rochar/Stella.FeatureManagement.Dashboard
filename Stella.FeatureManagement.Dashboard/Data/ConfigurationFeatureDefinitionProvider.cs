@@ -7,18 +7,11 @@ namespace Stella.FeatureManagement.Dashboard.Data;
 /// Provides feature definitions from configuration (appsettings.json).
 /// Used as fallback when no database is configured.
 /// </summary>
-internal class ConfigurationFeatureDefinitionProvider : IFeatureDefinitionProvider
+internal class ConfigurationFeatureDefinitionProvider(IConfiguration configuration) : IFeatureDefinitionProvider
 {
-    private readonly IConfiguration _configuration;
-
-    public ConfigurationFeatureDefinitionProvider(IConfiguration configuration)
-    {
-        _configuration = configuration;
-    }
-
     public async IAsyncEnumerable<FeatureDefinition> GetAllFeatureDefinitionsAsync()
     {
-        var featureManagementSection = _configuration.GetSection("FeatureManagement");
+        var featureManagementSection = configuration.GetSection("FeatureManagement");
 
         foreach (var feature in featureManagementSection.GetChildren())
         {
@@ -36,7 +29,7 @@ internal class ConfigurationFeatureDefinitionProvider : IFeatureDefinitionProvid
 
     public Task<FeatureDefinition?> GetFeatureDefinitionAsync(string featureName)
     {
-        var featureValue = _configuration[$"FeatureManagement:{featureName}"];
+        var featureValue = configuration[$"FeatureManagement:{featureName}"];
 
         if (featureValue is null)
         {

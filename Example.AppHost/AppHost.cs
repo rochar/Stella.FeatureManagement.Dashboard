@@ -1,12 +1,14 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Add PostgreSQL with a database
+// Add PostgreSQL with a database and pgAdmin
 var postgres = builder.AddPostgres("postgres")
+    .WithPgAdmin()
     .AddDatabase("exampledb");
 
 // Add your existing API project with a reference to the database
 var api = builder.AddProject<Projects.Example_Api>("api")
     .WithReference(postgres)
+    .WaitFor(postgres)
     .WithUrlForEndpoint("http", url => url.Url = "/features/dashboard");
 
 // Add the React UI (Vite) with an explicitly named endpoint

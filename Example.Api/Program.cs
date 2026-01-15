@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.FeatureManagement;
 using Scalar.AspNetCore;
 using Stella.FeatureManagement.Dashboard;
@@ -20,13 +21,12 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Add Feature Management
+builder.AddServiceDefaults();
+
+// Add Feature Management with Dashboard 
 builder.Services
     .AddFeatureManagement()
-    .AddDashboard();
-
-builder.AddServiceDefaults();
-builder.AddNpgsqlDataSource("exampledb");
+    .AddDashboard(options => options.UseNpgsql(builder.Configuration.GetConnectionString("exampledb")));
 
 var app = builder.Build();
 
@@ -40,7 +40,7 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-app.UseDashboard();
+await app.UseDashboardAsync();
 
 app.Run();
 

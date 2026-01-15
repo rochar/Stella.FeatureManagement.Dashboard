@@ -3,8 +3,12 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging;
 using Microsoft.FeatureManagement;
+using Stella.FeatureManagement.Dashboard.Data;
 
 namespace Stella.FeatureManagement.Dashboard;
 
@@ -18,15 +22,58 @@ public static class EndpointRouteBuilderExtensions
     /// </summary>
     /// <param name="routeBuilder">The <see cref="IEndpointRouteBuilder"/> to add dashboard endpoints to.</param>
     /// <param name="group">The route prefix for the dashboard endpoints. Defaults to "/features".</param>
+    /// <param name="cancellationToken"></param>
     /// <returns>The <see cref="IEndpointRouteBuilder"/> so that additional calls can be chained.</returns>
-    public static IEndpointRouteBuilder UseDashboard(this IEndpointRouteBuilder routeBuilder, string group = "/features")
+    public static async Task UseDashboardAsync(this IEndpointRouteBuilder routeBuilder, string group = "/features", CancellationToken cancellationToken = default)
     {
+        await using var scope = routeBuilder.ServiceProvider.CreateAsyncScope();
+        await RunMigrationsAsync(cancellationToken, scope);
+
         var routeGroup = routeBuilder.MapGroup(group)
             .RequireCors(policy => policy
                 .AllowAnyOrigin()
                 .AllowAnyMethod()
                 .AllowAnyHeader());
 
+        RegisterDashboardUiEndpoints(routeGroup);
+
+
+        routeGroup.MapGet("", async (IFeatureManager featureManager) =>
+        {
+            var features = new List<FeatureState>();
+            await foreach (var featureName in featureManager.GetFeatureNamesAsync().WithCancellation(CancellationToken.None))
+            {
+                var isEnabled = await featureManager.IsEnabledAsync(featureName);
+                features.Add(new FeatureState(featureName, isEnabled));
+            }
+
+            return features;
+        }).Produces<List<FeatureState>>(200);
+
+        routeGroup.MapGet("{featureName}", async (string featureName, IFeatureManager featureManager) =>
+        {
+            var isEnabled = await featureManager.IsEnabledAsync(featureName);
+            return isEnabled;
+        }).Produces<bool>(200);
+    }
+
+    private static async Task RunMigrationsAsync(CancellationToken cancellationToken, AsyncServiceScope scope)
+    {
+        var factory = scope.ServiceProvider.GetService<IDbContextFactory<FeatureFlagDbContext>>();
+        var logger = scope.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger(typeof(EndpointRouteBuilderExtensions));
+
+        if (factory is not null)
+        {
+            await using var context = await factory.CreateDbContextAsync(cancellationToken);
+
+            logger?.LogInformation("Applying Feature Management Dashboard database migrations...");
+            await context.Database.MigrateAsync(cancellationToken);
+            logger?.LogInformation("Feature Management Dashboard database migrations applied successfully.");
+        }
+    }
+
+    private static void RegisterDashboardUiEndpoints(RouteGroupBuilder routeGroup)
+    {
         // Serve React SPA from embedded files
         var embeddedProvider = new ManifestEmbeddedFileProvider(
             typeof(EndpointRouteBuilderExtensions).Assembly, "wwwroot");
@@ -63,27 +110,6 @@ public static class EndpointRouteBuilderExtensions
             return Results.Stream(file.CreateReadStream(), contentType);
 
         }).ExcludeFromDescription();
-
-
-        routeGroup.MapGet("", async (IFeatureManager featureManager) =>
-        {
-            var features = new List<FeatureState>();
-            await foreach (var featureName in featureManager.GetFeatureNamesAsync())
-            {
-                var isEnabled = await featureManager.IsEnabledAsync(featureName);
-                features.Add(new FeatureState(featureName, isEnabled));
-            }
-
-            return features;
-        }).Produces<List<FeatureState>>(200);
-
-        routeGroup.MapGet("{featureName}", async (string featureName, IFeatureManager featureManager) =>
-        {
-            var isEnabled = await featureManager.IsEnabledAsync(featureName);
-            return isEnabled;
-        }).Produces<bool>(200);
-
-        return routeBuilder;
     }
 
     private record FeatureState(string FeatureName, bool IsEnabled);
