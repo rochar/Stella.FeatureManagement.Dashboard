@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../Example.Api"
+		},
+		{
+			"path": "../Stella.FeatureManagement.Dashboard"
+		}
+	],
+	"settings": {}
+}

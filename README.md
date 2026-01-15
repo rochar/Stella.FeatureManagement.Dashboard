@@ -1,5 +1,7 @@
 # Stella.FeatureManagement.Dashboard
-Adds a ready-to-use web dashboard to ASP.NET Core applications for managing feature flags powered by Microsoft.FeatureManagement.  It provides a REST APIs to view, enable, disable, and configure feature flags at runtime
+Adds a ready-to-use web dashboard to ASP.NET Core applications for managing feature flags powered by Microsoft.FeatureManagement. It provides a web UI and REST APIs to view, enable, disable, and configure feature flags at runtime.
+
+![Dashboard UI](./docs/dashboard.png)
 
 ## Installation
 
@@ -49,11 +51,22 @@ app.UseDashboard();
 app.Run();
 ```
 
-### 3. Access the Dashboard API
+### 3. Access the Dashboard
 
-Once your application is running, you can query feature flags via the REST API:
+Once your application is running, access the web dashboard at:
+
+```
+https://localhost:<port>/features/dashboard/
+```
+
+### 4. REST API
+
+You can also query feature flags programmatically via the REST API:
 
 ```bash
+# Get all features
+GET /features
+
 # Check if a specific feature is enabled
 GET /features/BetaFeature
 
