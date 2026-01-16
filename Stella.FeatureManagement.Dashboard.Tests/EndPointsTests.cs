@@ -1,12 +1,11 @@
-using Microsoft.AspNetCore.Mvc.Testing;
 using Shouldly;
 using System.Net;
 
 namespace Stella.FeatureManagement.Dashboard.Tests;
 
-public class EndPointTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
 {
-    private readonly HttpClient _client = factory.CreateClient();
+    private readonly HttpClient _client = webApp.CreateClient();
 
     [Theory]
     [InlineData("MyFlag", true)]

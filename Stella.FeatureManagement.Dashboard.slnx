@@ -1,5 +1,8 @@
 
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+  </Folder>
   <Project Path="Example.Api/Example.Api.csproj" />
   <Project Path="Example.AppHost/Example.AppHost.csproj" />
   <Project Path="Example.ServiceDefaults/Example.ServiceDefaults.csproj" />

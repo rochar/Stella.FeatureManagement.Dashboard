@@ -20,8 +20,8 @@ public static class FeatureManagementBuilderExtensions
     public static IFeatureManagementBuilder AddDashboard(this IFeatureManagementBuilder builder, Action<DbContextOptionsBuilder> configureDbContext)
     {
         builder.Services.AddDbContextFactory<FeatureFlagDbContext>(configureDbContext);
-
         builder.Services.AddSingleton<IFeatureDefinitionProvider, DatabaseFeatureDefinitionProvider>();
+        builder.Services.AddScoped<IFeatureOptionsApplier, FeatureOptionsApplier>();
 
         return builder;
     }

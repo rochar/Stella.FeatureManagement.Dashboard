@@ -22,12 +22,20 @@ public static class EndpointRouteBuilderExtensions
     /// </summary>
     /// <param name="routeBuilder">The <see cref="IEndpointRouteBuilder"/> to add dashboard endpoints to.</param>
     /// <param name="group">The route prefix for the dashboard endpoints. Defaults to "/features".</param>
+    /// <param name="configure">Optional action to configure dashboard options for seeding features.</param>
     /// <param name="cancellationToken"></param>
     /// <returns>The <see cref="IEndpointRouteBuilder"/> so that additional calls can be chained.</returns>
-    public static async Task UseDashboardAsync(this IEndpointRouteBuilder routeBuilder, string group = "/features", CancellationToken cancellationToken = default)
+    public static async Task UseDashboardAsync(this IEndpointRouteBuilder routeBuilder,
+        string group = "/features",
+        Action<DashboardOptions>? configure = null,
+        CancellationToken cancellationToken = default)
     {
         await using var scope = routeBuilder.ServiceProvider.CreateAsyncScope();
-        await RunMigrationsAsync(cancellationToken, scope);
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
+            .CreateLogger(typeof(EndpointRouteBuilderExtensions));
+
+        await RunMigrationsAsync(scope, logger, cancellationToken);
+        await ApplyFeatureOptionsAsync(scope, logger, configure, cancellationToken);
 
         var routeGroup = routeBuilder.MapGroup(group)
             .RequireCors(policy => policy
@@ -41,7 +49,8 @@ public static class EndpointRouteBuilderExtensions
         routeGroup.MapGet("", async (IFeatureManager featureManager) =>
         {
             var features = new List<FeatureState>();
-            await foreach (var featureName in featureManager.GetFeatureNamesAsync().WithCancellation(CancellationToken.None))
+            await foreach (var featureName in featureManager.GetFeatureNamesAsync()
+                               .WithCancellation(CancellationToken.None))
             {
                 var isEnabled = await featureManager.IsEnabledAsync(featureName);
                 features.Add(new FeatureState(featureName, isEnabled));
@@ -57,19 +66,38 @@ public static class EndpointRouteBuilderExtensions
         }).Produces<bool>(200);
     }
 
-    private static async Task RunMigrationsAsync(CancellationToken cancellationToken, AsyncServiceScope scope)
+    private static async Task RunMigrationsAsync(AsyncServiceScope scope, ILogger logger,
+        CancellationToken cancellationToken)
     {
         var factory = scope.ServiceProvider.GetService<IDbContextFactory<FeatureFlagDbContext>>();
-        var logger = scope.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger(typeof(EndpointRouteBuilderExtensions));
 
         if (factory is not null)
         {
             await using var context = await factory.CreateDbContextAsync(cancellationToken);
 
-            logger?.LogInformation("Applying Feature Management Dashboard database migrations...");
+            logger.LogInformation("Applying Feature Management Dashboard database migrations...");
             await context.Database.MigrateAsync(cancellationToken);
-            logger?.LogInformation("Feature Management Dashboard database migrations applied successfully.");
+            logger.LogInformation("Feature Management Dashboard database migrations applied successfully.");
         }
+    }
+
+    private static async Task ApplyFeatureOptionsAsync(AsyncServiceScope scope, ILogger logger,
+        Action<DashboardOptions>? configure, CancellationToken cancellationToken)
+    {
+        if (configure is null) return;
+
+        var options = new DashboardOptions();
+        configure(options);
+
+        var applier = scope.ServiceProvider.GetService<IFeatureOptionsApplier>();
+
+        if (applier is null)
+        {
+            logger.LogError("Cannot apply feature options: IFeatureOptionsApplier is not registered.");
+            return;
+        }
+
+        await applier.ApplyAsync(options, cancellationToken);
     }
 
     private static void RegisterDashboardUiEndpoints(RouteGroupBuilder routeGroup)
@@ -83,32 +111,22 @@ public static class EndpointRouteBuilderExtensions
             var encodedPath = context.Request.GetEncodedPathAndQuery(); // Path + query only
 
             if (string.IsNullOrEmpty(path))
-            {
-                return Results.Redirect(encodedPath.EndsWith("/", StringComparison.CurrentCultureIgnoreCase) ?
-                    "index.html" : "dashboard/index.html");
-            }
+                return Results.Redirect(encodedPath.EndsWith("/", StringComparison.CurrentCultureIgnoreCase)
+                    ? "index.html"
+                    : "dashboard/index.html");
 
             var file = embeddedProvider.GetFileInfo(path);
 
             // SPA fallback: serve index.html for client-side routing
-            if (!file.Exists || file.IsDirectory)
-            {
-                file = embeddedProvider.GetFileInfo("index.html");
-            }
+            if (!file.Exists || file.IsDirectory) file = embeddedProvider.GetFileInfo("index.html");
 
-            if (!file.Exists)
-            {
-                return Results.NotFound();
-            }
+            if (!file.Exists) return Results.NotFound();
 
             var contentTypeProvider = new FileExtensionContentTypeProvider();
             if (!contentTypeProvider.TryGetContentType(file.Name, out var contentType))
-            {
                 contentType = "application/octet-stream";
-            }
 
             return Results.Stream(file.CreateReadStream(), contentType);
-
         }).ExcludeFromDescription();
     }
 

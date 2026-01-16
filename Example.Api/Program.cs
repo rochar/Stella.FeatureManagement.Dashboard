@@ -16,8 +16,8 @@ builder.Services.AddCors(options =>
     options.AddPolicy(dashboardCorsPolicy, policy =>
     {
         policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+            .AllowAnyMethod()
+            .AllowAnyHeader();
     });
 });
 
@@ -40,7 +40,14 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-await app.UseDashboardAsync();
+await app.UseDashboardAsync(configure: (o) =>
+{
+    o.AddIfNotExists = new Dictionary<string, bool>
+    {
+        { "MyFlag", true },
+        { "AnotherFlag", false }
+    };
+});
 
 app.Run();
 
