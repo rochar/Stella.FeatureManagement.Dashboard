@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -15,13 +16,15 @@ public static class EndpointRouteBuilderExtensions
     /// Creates a route group and maps the Feature Management Dashboard endpoints to it.
     /// </summary>
     /// <param name="routeBuilder">The <see cref="IEndpointRouteBuilder"/> to add dashboard endpoints to.</param>
+    /// <param name="configure">Action to configure dashboard options for seeding features.</param>
     /// <param name="group">The route prefix for the dashboard endpoints. Defaults to "/features".</param>
-    /// <param name="configure">Optional action to configure dashboard options for seeding features.</param>
+    /// <param name="configureCors">Optional action to configure CORS policy for the dashboard endpoints.</param>
     /// <param name="cancellationToken"></param>
     /// <returns>The <see cref="IEndpointRouteBuilder"/> so that additional calls can be chained.</returns>
-    public static async Task UseDashboardAsync(this IEndpointRouteBuilder routeBuilder,
+    public static async Task UseFeaturesDashboardAsync(this IEndpointRouteBuilder routeBuilder,
+        Action<DashboardOptions> configure,
         string group = "/features",
-        Action<DashboardOptions>? configure = null,
+        Action<CorsPolicyBuilder>? configureCors = null,
         CancellationToken cancellationToken = default)
     {
         await using var scope = routeBuilder.ServiceProvider.CreateAsyncScope();
@@ -30,11 +33,14 @@ public static class EndpointRouteBuilderExtensions
 
         await InitializeDashboardAsync(scope, logger, configure, cancellationToken);
 
-        routeBuilder.MapGroup(group)
-            .RequireCors(policy => policy
-                .AllowAnyOrigin()
-                .AllowAnyMethod()
-                .AllowAnyHeader())
+        var routeGroup = routeBuilder.MapGroup(group);
+
+        if (configureCors is not null)
+        {
+            routeGroup.RequireCors(configureCors);
+        }
+
+        routeGroup
             .MapStaticDashboard()
             .MapGetFeatures()
             .MapPutFeatures();

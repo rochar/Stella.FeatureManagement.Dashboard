@@ -36,12 +36,19 @@ using Stella.FeatureManagement.Dashboard;
 ...
 // Add Feature Management with Dashboard
 builder.Services.AddFeatureManagement()
-    .AddDashboard(options => options.UseNpgsql(builder.Configuration.GetConnectionString("exampledb")));
+    .AddFeaturesDashboard(options => options.UseNpgsql(builder.Configuration.GetConnectionString("exampledb")));
 
 var app = builder.Build();
 
 // Map the dashboard endpoints and migrate database
-await app.UseDashboardAsync();
+await app.UseFeaturesDashboardAsync(configure: (o) =>
+{
+    o.AddIfNotExists = new Dictionary<string, bool>
+    {
+        { "MyFlag", true },
+        { "AnotherFlag", false }
+    };
+});
     
 
 app.Run();

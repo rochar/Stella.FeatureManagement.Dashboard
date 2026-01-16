@@ -26,7 +26,7 @@ builder.AddServiceDefaults();
 // Add Feature Management with Dashboard 
 builder.Services
     .AddFeatureManagement()
-    .AddDashboard(options => options.UseNpgsql(builder.Configuration.GetConnectionString("exampledb")));
+    .AddFeaturesDashboard(options => options.UseNpgsql(builder.Configuration.GetConnectionString("exampledb")));
 
 var app = builder.Build();
 
@@ -40,14 +40,18 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-await app.UseDashboardAsync(configure: (o) =>
-{
-    o.AddIfNotExists = new Dictionary<string, bool>
+await app.UseFeaturesDashboardAsync((o) =>
     {
-        { "MyFlag", true },
-        { "AnotherFlag", false }
-    };
-});
+        o.AddIfNotExists = new Dictionary<string, bool>
+        {
+            { "MyFlag", true },
+            { "AnotherFlag", false }
+        };
+    },
+    configureCors: policy => policy
+        .AllowAnyOrigin()
+        .AllowAnyMethod()
+        .AllowAnyHeader());
 
 app.Run();
 
