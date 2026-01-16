@@ -1,14 +1,8 @@
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.AspNetCore.StaticFiles;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
-using Microsoft.FeatureManagement;
-using Stella.FeatureManagement.Dashboard.Data;
+using Stella.FeatureManagement.Dashboard.EndPoints;
 
 namespace Stella.FeatureManagement.Dashboard;
 
@@ -34,54 +28,20 @@ public static class EndpointRouteBuilderExtensions
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
             .CreateLogger(typeof(EndpointRouteBuilderExtensions));
 
-        await RunMigrationsAsync(scope, logger, cancellationToken);
-        await ApplyFeatureOptionsAsync(scope, logger, configure, cancellationToken);
+        await InitializeDashboardAsync(scope, logger, configure, cancellationToken);
 
-        var routeGroup = routeBuilder.MapGroup(group)
+        routeBuilder.MapGroup(group)
             .RequireCors(policy => policy
                 .AllowAnyOrigin()
                 .AllowAnyMethod()
-                .AllowAnyHeader());
-
-        RegisterDashboardUiEndpoints(routeGroup);
-
-
-        routeGroup.MapGet("", async (IFeatureManager featureManager) =>
-        {
-            var features = new List<FeatureState>();
-            await foreach (var featureName in featureManager.GetFeatureNamesAsync()
-                               .WithCancellation(CancellationToken.None))
-            {
-                var isEnabled = await featureManager.IsEnabledAsync(featureName);
-                features.Add(new FeatureState(featureName, isEnabled));
-            }
-
-            return features;
-        }).Produces<List<FeatureState>>(200);
-
-        routeGroup.MapGet("{featureName}", async (string featureName, IFeatureManager featureManager) =>
-        {
-            var isEnabled = await featureManager.IsEnabledAsync(featureName);
-            return isEnabled;
-        }).Produces<bool>(200);
+                .AllowAnyHeader())
+            .MapStaticDashboard()
+            .MapGetFeatures()
+            .MapPutFeatures();
     }
 
-    private static async Task RunMigrationsAsync(AsyncServiceScope scope, ILogger logger,
-        CancellationToken cancellationToken)
-    {
-        var factory = scope.ServiceProvider.GetService<IDbContextFactory<FeatureFlagDbContext>>();
 
-        if (factory is not null)
-        {
-            await using var context = await factory.CreateDbContextAsync(cancellationToken);
-
-            logger.LogInformation("Applying Feature Management Dashboard database migrations...");
-            await context.Database.MigrateAsync(cancellationToken);
-            logger.LogInformation("Feature Management Dashboard database migrations applied successfully.");
-        }
-    }
-
-    private static async Task ApplyFeatureOptionsAsync(AsyncServiceScope scope, ILogger logger,
+    private static async Task InitializeDashboardAsync(AsyncServiceScope scope, ILogger logger,
         Action<DashboardOptions>? configure, CancellationToken cancellationToken)
     {
         if (configure is null) return;
@@ -89,7 +49,7 @@ public static class EndpointRouteBuilderExtensions
         var options = new DashboardOptions();
         configure(options);
 
-        var applier = scope.ServiceProvider.GetService<IFeatureOptionsApplier>();
+        var applier = scope.ServiceProvider.GetService<IDashboardInitializer>();
 
         if (applier is null)
         {
@@ -97,38 +57,7 @@ public static class EndpointRouteBuilderExtensions
             return;
         }
 
-        await applier.ApplyAsync(options, cancellationToken);
+        await applier.RunMigrationsAsync(cancellationToken);
+        await applier.ApplyDashboardOptionsAsync(options, cancellationToken);
     }
-
-    private static void RegisterDashboardUiEndpoints(RouteGroupBuilder routeGroup)
-    {
-        // Serve React SPA from embedded files
-        var embeddedProvider = new ManifestEmbeddedFileProvider(
-            typeof(EndpointRouteBuilderExtensions).Assembly, "wwwroot");
-
-        routeGroup.MapGet("dashboard/{**path}", (HttpContext context, string? path) =>
-        {
-            var encodedPath = context.Request.GetEncodedPathAndQuery(); // Path + query only
-
-            if (string.IsNullOrEmpty(path))
-                return Results.Redirect(encodedPath.EndsWith("/", StringComparison.CurrentCultureIgnoreCase)
-                    ? "index.html"
-                    : "dashboard/index.html");
-
-            var file = embeddedProvider.GetFileInfo(path);
-
-            // SPA fallback: serve index.html for client-side routing
-            if (!file.Exists || file.IsDirectory) file = embeddedProvider.GetFileInfo("index.html");
-
-            if (!file.Exists) return Results.NotFound();
-
-            var contentTypeProvider = new FileExtensionContentTypeProvider();
-            if (!contentTypeProvider.TryGetContentType(file.Name, out var contentType))
-                contentType = "application/octet-stream";
-
-            return Results.Stream(file.CreateReadStream(), contentType);
-        }).ExcludeFromDescription();
-    }
-
-    private record FeatureState(string FeatureName, bool IsEnabled);
 }

@@ -7,11 +7,11 @@ namespace Stella.FeatureManagement.Dashboard;
 /// <summary>
 /// Service for applying feature flag options to the database.
 /// </summary>
-public class FeatureOptionsApplier(FeatureFlagDbContext context, ILogger<FeatureOptionsApplier> logger)
-    : IFeatureOptionsApplier
+internal sealed class DashboardInitializer(FeatureFlagDbContext context, ILogger<DashboardInitializer> logger)
+    : IDashboardInitializer
 {
     /// <inheritdoc />
-    public async Task ApplyAsync(DashboardOptions options, CancellationToken cancellationToken = default)
+    public async Task ApplyDashboardOptionsAsync(DashboardOptions options, CancellationToken cancellationToken = default)
     {
         await DeleteFeatureAsync(options, cancellationToken);
 
@@ -20,6 +20,12 @@ public class FeatureOptionsApplier(FeatureFlagDbContext context, ILogger<Feature
         await AddOrUpdateFeatures(options, cancellationToken);
 
         await context.SaveChangesAsync(cancellationToken);
+    }
+    public async Task RunMigrationsAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Applying Feature Management Dashboard database migrations...");
+        await context.Database.MigrateAsync(cancellationToken);
+        logger.LogInformation("Feature Management Dashboard database migrations applied successfully.");
     }
 
     private async Task AddOrUpdateFeatures(DashboardOptions options, CancellationToken cancellationToken)

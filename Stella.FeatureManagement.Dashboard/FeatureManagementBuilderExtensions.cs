@@ -21,7 +21,7 @@ public static class FeatureManagementBuilderExtensions
     {
         builder.Services.AddDbContextFactory<FeatureFlagDbContext>(configureDbContext);
         builder.Services.AddSingleton<IFeatureDefinitionProvider, DatabaseFeatureDefinitionProvider>();
-        builder.Services.AddScoped<IFeatureOptionsApplier, FeatureOptionsApplier>();
+        builder.Services.AddScoped<IDashboardInitializer, DashboardInitializer>();
 
         return builder;
     }

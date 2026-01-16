@@ -3,7 +3,7 @@ namespace Stella.FeatureManagement.Dashboard;
 /// <summary>
 /// Configuration options for the Feature Management Dashboard.
 /// </summary>
-public class DashboardOptions
+public sealed class DashboardOptions
 {
     /// <summary>
     /// Gets or sets the features to add if they don't exist.
