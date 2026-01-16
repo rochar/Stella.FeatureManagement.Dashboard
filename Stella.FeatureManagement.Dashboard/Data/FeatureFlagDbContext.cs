@@ -28,6 +28,8 @@ public class FeatureFlagDbContext : DbContext
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasDefaultSchema("features");
+
         modelBuilder.Entity<FeatureFlag>(entity =>
         {
             entity.ToTable("FeatureFlags");

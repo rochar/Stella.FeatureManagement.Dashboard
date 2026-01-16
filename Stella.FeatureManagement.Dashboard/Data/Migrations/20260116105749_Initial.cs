@@ -7,13 +7,17 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Stella.FeatureManagement.Dashboard.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class Initial : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.EnsureSchema(
+                name: "features");
+
             migrationBuilder.CreateTable(
                 name: "FeatureFlags",
+                schema: "features",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "integer", nullable: false)
@@ -30,6 +34,7 @@ namespace Stella.FeatureManagement.Dashboard.Data.Migrations
 
             migrationBuilder.CreateTable(
                 name: "FeatureFilters",
+                schema: "features",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "integer", nullable: false)
@@ -44,6 +49,7 @@ namespace Stella.FeatureManagement.Dashboard.Data.Migrations
                     table.ForeignKey(
                         name: "FK_FeatureFilters_FeatureFlags_FeatureFlagId",
                         column: x => x.FeatureFlagId,
+                        principalSchema: "features",
                         principalTable: "FeatureFlags",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
@@ -51,11 +57,13 @@ namespace Stella.FeatureManagement.Dashboard.Data.Migrations
 
             migrationBuilder.CreateIndex(
                 name: "IX_FeatureFilters_FeatureFlagId",
+                schema: "features",
                 table: "FeatureFilters",
                 column: "FeatureFlagId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_FeatureFlags_Name",
+                schema: "features",
                 table: "FeatureFlags",
                 column: "Name",
                 unique: true);
@@ -65,10 +73,12 @@ namespace Stella.FeatureManagement.Dashboard.Data.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "FeatureFilters");
+                name: "FeatureFilters",
+                schema: "features");
 
             migrationBuilder.DropTable(
-                name: "FeatureFlags");
+                name: "FeatureFlags",
+                schema: "features");
         }
     }
 }

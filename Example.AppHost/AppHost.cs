@@ -1,7 +1,10 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Add PostgreSQL with a database and pgAdmin
-var postgres = builder.AddPostgres("postgres")
+var postgresPassword = builder.AddParameter("postgres-password", secret: true);
+
+var postgres = builder.AddPostgres("postgres", password: postgresPassword)
+    .WithHostPort(5432)
     .WithPgAdmin()
     .AddDatabase("exampledb");
 

@@ -17,6 +17,7 @@ namespace Stella.FeatureManagement.Dashboard.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
+                .HasDefaultSchema("features")
                 .HasAnnotation("ProductVersion", "8.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -46,7 +47,7 @@ namespace Stella.FeatureManagement.Dashboard.Data.Migrations
 
                     b.HasIndex("FeatureFlagId");
 
-                    b.ToTable("FeatureFilters", (string)null);
+                    b.ToTable("FeatureFilters", "features");
                 });
 
             modelBuilder.Entity("Stella.FeatureManagement.Dashboard.Data.FeatureFlag", b =>
@@ -76,7 +77,7 @@ namespace Stella.FeatureManagement.Dashboard.Data.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("FeatureFlags", (string)null);
+                    b.ToTable("FeatureFlags", "features");
                 });
 
             modelBuilder.Entity("Stella.FeatureManagement.Dashboard.Data.FeatureFilter", b =>

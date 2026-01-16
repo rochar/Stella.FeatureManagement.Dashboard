@@ -17,7 +17,7 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<FeatureFla
         // Default connection string for design-time operations
         // This can be overridden using environment variables or command-line arguments
         var connectionString = Environment.GetEnvironmentVariable("POSTGRES_CONNECTION_STRING")
-            ?? "Host=localhost;Port=56595;Database=exampledb;Username=postgres;Password=~*_WJAB}6NaFAD11GRF_qC";
+            ?? "postgresql://postgres:~%2A_WJAB%7D6NaFAD11GRF_qC@localhost:5432/exampledb";
 
         optionsBuilder.UseNpgsql(connectionString);
 
