@@ -37,9 +37,9 @@ export default function App() {
     fetchFeatures()
   }, [fetchFeatures])
 
-  const filteredFeatures = features.filter(f =>
-    f.featureName.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredFeatures = features
+    .filter(f => f.featureName.toLowerCase().includes(searchTerm.toLowerCase()))
+    .sort((a, b) => a.featureName.localeCompare(b.featureName))
 
   const enabledCount = features.filter(f => f.isEnabled).length
   const disabledCount = features.length - enabledCount
@@ -135,10 +135,24 @@ export default function App() {
                   <div className="feature-info">
                     <span className="feature-name">{f.featureName}</span>
                   </div>
-                  <div className={`status-badge ${f.isEnabled ? 'enabled' : 'disabled'}`}>
-                    <span className="status-dot"></span>
-                    {f.isEnabled ? 'Enabled' : 'Disabled'}
-                  </div>
+                  <button
+                    className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
+                    onClick={() => {
+                      setFeatures(prev =>
+                        prev.map(feature =>
+                          feature.featureName === f.featureName
+                            ? { ...feature, isEnabled: !feature.isEnabled }
+                            : feature
+                        )
+                      )
+                    }}
+                    aria-label={`Toggle ${f.featureName}`}
+                  >
+                    <span className="toggle-track">
+                      <span className="toggle-thumb"></span>
+                    </span>
+                    <span className="toggle-text">{f.isEnabled ? 'Enabled' : 'Disabled'}</span>
+                  </button>
                 </div>
               ))
             )}

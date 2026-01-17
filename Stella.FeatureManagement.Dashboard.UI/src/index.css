@@ -155,7 +155,7 @@ h1 {
 }
 
 .stat-disabled .stat-value {
-  color: var(--color-danger);
+  color: #6b7280;
 }
 
 /* Search */
@@ -301,6 +301,75 @@ h1 {
 .status-badge.disabled .status-dot {
   background-color: var(--color-danger);
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: transparent;
+  transition: background-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.toggle-switch:hover {
+  background-color: var(--color-bg);
+}
+
+.toggle-track {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  transition: background-color 0.2s ease;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  background-color: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.toggle-switch.enabled .toggle-track {
+  background-color: var(--color-success);
+}
+
+.toggle-switch.enabled .toggle-thumb {
+  transform: translateX(22px);
+}
+
+.toggle-switch.disabled .toggle-track {
+  background-color: #9ca3af;
+}
+
+.toggle-switch.disabled .toggle-thumb {
+  transform: translateX(2px);
+}
+
+.toggle-text {
+  font-weight: 600;
+  font-size: 0.8rem;
+  min-width: 60px;
+  text-align: left;
+}
+
+.toggle-switch.enabled .toggle-text {
+  color: #065f46;
+}
+
+.toggle-switch.disabled .toggle-text {
+  color: #6b7280;
 }
 
 /* Loading State */
