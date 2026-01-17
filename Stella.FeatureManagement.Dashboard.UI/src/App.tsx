@@ -17,6 +17,11 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [newFeatureName, setNewFeatureName] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const fetchFeatures = useCallback(async () => {
     try {
@@ -74,6 +79,66 @@ export default function App() {
     }
   }, [])
 
+  const createFeature = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault()
+    const featureName = newFeatureName.trim()
+    if (!featureName) return
+
+    setCreating(true)
+    setError(null)
+
+    try {
+      const res = await fetch(API_BASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ featureName, isEnabled: false })
+      })
+
+      if (res.status === 409) {
+        throw new Error(`Feature '${featureName}' already exists`)
+      }
+
+      if (!res.ok) {
+        throw new Error(`Failed to create feature (${res.status})`)
+      }
+
+      const created = await res.json()
+      setFeatures(prev => [...prev, created])
+      setNewFeatureName('')
+      setShowAddModal(false)
+      setLastUpdated(new Date())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create feature')
+    } finally {
+      setCreating(false)
+    }
+  }, [newFeatureName])
+
+  const deleteFeature = useCallback(async () => {
+    if (!deleteTarget) return
+
+    setDeleting(true)
+    setError(null)
+
+    try {
+      const res = await fetch(`${API_BASE}/${deleteTarget}`, {
+        method: 'DELETE'
+      })
+
+      if (!res.ok) {
+        throw new Error(`Failed to delete feature (${res.status})`)
+      }
+
+      setFeatures(prev => prev.filter(f => f.featureName !== deleteTarget))
+      setDeleteTarget(null)
+      setLastUpdated(new Date())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete feature')
+    } finally {
+      setDeleting(false)
+    }
+  }, [deleteTarget])
+
   useEffect(() => {
     fetchFeatures()
   }, [fetchFeatures])
@@ -97,12 +162,68 @@ export default function App() {
           </div>
           <p className="header-subtitle">Monitor and track feature flags in your application</p>
         </div>
-        <button className="refresh-btn" onClick={fetchFeatures} disabled={loading} title="Refresh features">
-          <svg className={`refresh-icon ${loading ? 'spinning' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-          </svg>
-        </button>
+        <div className="header-actions">
+          <button className="add-btn" onClick={() => setShowAddModal(true)} title="Add new feature">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            <span>Feature</span>
+          </button>
+          <button className="refresh-btn" onClick={fetchFeatures} disabled={loading} title="Refresh features">
+            <svg className={`refresh-icon ${loading ? 'spinning' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+            </svg>
+          </button>
+        </div>
       </header>
+
+      {/* Add Feature Modal */}
+      {showAddModal && (
+        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Add New Feature</h2>
+              <button className="modal-close" onClick={() => setShowAddModal(false)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={createFeature}>
+              <div className="modal-body">
+                <label htmlFor="featureName" className="modal-label">Feature Name</label>
+                <input
+                  id="featureName"
+                  type="text"
+                  className="modal-input"
+                  placeholder="Enter feature name..."
+                  value={newFeatureName}
+                  onChange={(e) => setNewFeatureName(e.target.value)}
+                  disabled={creating}
+                  autoFocus
+                />
+              </div>
+              <div className="modal-footer">
+                <button 
+                  type="button" 
+                  className="modal-btn modal-btn-cancel"
+                  onClick={() => setShowAddModal(false)}
+                  disabled={creating}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="modal-btn modal-btn-primary"
+                  disabled={creating || !newFeatureName.trim()}
+                >
+                  {creating ? <span className="btn-loading"></span> : 'Add Feature'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="stats-grid">
@@ -176,23 +297,74 @@ export default function App() {
                   <div className="feature-info">
                     <span className="feature-name">{f.featureName}</span>
                   </div>
-                  <button
-                    className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
-                    onClick={() => toggleFeature(f.featureName, f.isEnabled)}
-                    disabled={updating === f.featureName}
-                    aria-label={`Toggle ${f.featureName}`}
-                  >
-                    <span className="toggle-track">
-                      <span className="toggle-thumb"></span>
-                    </span>
-                    <span className="toggle-text">{f.isEnabled ? 'Enabled' : 'Disabled'}</span>
-                  </button>
+                  <div className="feature-actions">
+                    <button
+                      className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
+                      onClick={() => toggleFeature(f.featureName, f.isEnabled)}
+                      disabled={updating === f.featureName}
+                      aria-label={`Toggle ${f.featureName}`}
+                    >
+                      <span className="toggle-track">
+                        <span className="toggle-thumb"></span>
+                      </span>
+                      <span className="toggle-text">{f.isEnabled ? 'Enabled' : 'Disabled'}</span>
+                    </button>
+                    <button
+                      className="delete-btn"
+                      onClick={() => setDeleteTarget(f.featureName)}
+                      aria-label={`Delete ${f.featureName}`}
+                      title="Delete feature"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               ))
             )}
           </div>
         )}
       </main>
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
+          <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Delete Feature</h2>
+              <button className="modal-close" onClick={() => setDeleteTarget(null)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="delete-confirm-text">
+                Are you sure you want to delete <strong>{deleteTarget}</strong>? This action cannot be undone.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button 
+                type="button" 
+                className="modal-btn modal-btn-cancel"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="modal-btn modal-btn-danger"
+                onClick={deleteFeature}
+                disabled={deleting}
+              >
+                {deleting ? <span className="btn-loading btn-loading-danger"></span> : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {lastUpdated && (
         <footer className="footer">
