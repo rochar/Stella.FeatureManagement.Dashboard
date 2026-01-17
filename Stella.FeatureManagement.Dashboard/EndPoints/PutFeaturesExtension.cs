@@ -13,8 +13,9 @@ internal static class PutFeaturesExtension
         routeGroup.MapPut("{featureName}", async (
             string featureName,
             UpdateFeatureRequest request,
-            FeatureFlagDbContext context) =>
+            IDbContextFactory<FeatureFlagDbContext> contextFactory) =>
         {
+            await using var context = await contextFactory.CreateDbContextAsync();
             var feature = await context.FeatureFlags
                 .FirstOrDefaultAsync(f => f.Name == featureName);
 

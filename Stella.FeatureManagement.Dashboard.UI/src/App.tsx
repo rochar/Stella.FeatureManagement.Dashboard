@@ -13,6 +13,7 @@ const API_BASE = import.meta.env.VITE_API_URL
 export default function App() {
   const [features, setFeatures] = useState<FeatureState[]>([])
   const [loading, setLoading] = useState(true)
+  const [updating, setUpdating] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -30,6 +31,46 @@ export default function App() {
       setError(err instanceof Error ? err.message : 'An unknown error occurred')
     } finally {
       setLoading(false)
+    }
+  }, [])
+
+  const toggleFeature = useCallback(async (featureName: string, currentState: boolean) => {
+    const newState = !currentState
+    setUpdating(featureName)
+    
+    // Optimistic update
+    setFeatures(prev =>
+      prev.map(feature =>
+        feature.featureName === featureName
+          ? { ...feature, isEnabled: newState }
+          : feature
+      )
+    )
+
+    try {
+      const res = await fetch(`${API_BASE}/${featureName}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isEnabled: newState })
+      })
+
+      if (!res.ok) {
+        throw new Error(`Failed to update feature (${res.status})`)
+      }
+
+      setLastUpdated(new Date())
+    } catch (err) {
+      // Revert on error
+      setFeatures(prev =>
+        prev.map(feature =>
+          feature.featureName === featureName
+            ? { ...feature, isEnabled: currentState }
+            : feature
+        )
+      )
+      setError(err instanceof Error ? err.message : 'Failed to update feature')
+    } finally {
+      setUpdating(null)
     }
   }, [])
 
@@ -137,15 +178,8 @@ export default function App() {
                   </div>
                   <button
                     className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
-                    onClick={() => {
-                      setFeatures(prev =>
-                        prev.map(feature =>
-                          feature.featureName === f.featureName
-                            ? { ...feature, isEnabled: !feature.isEnabled }
-                            : feature
-                        )
-                      )
-                    }}
+                    onClick={() => toggleFeature(f.featureName, f.isEnabled)}
+                    disabled={updating === f.featureName}
                     aria-label={`Toggle ${f.featureName}`}
                   >
                     <span className="toggle-track">

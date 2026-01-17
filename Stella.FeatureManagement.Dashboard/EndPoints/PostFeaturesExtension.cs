@@ -12,8 +12,9 @@ internal static class PostFeaturesExtension
     {
         routeGroup.MapPost("", async (
             CreateFeatureRequest request,
-            FeatureFlagDbContext context) =>
+            IDbContextFactory<FeatureFlagDbContext> contextFactory) =>
         {
+            await using var context = await contextFactory.CreateDbContextAsync();
             var exists = await context.FeatureFlags
                 .AnyAsync(f => f.Name == request.FeatureName);
 

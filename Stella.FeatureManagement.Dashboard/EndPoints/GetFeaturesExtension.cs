@@ -1,7 +1,8 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.FeatureManagement;
+using Microsoft.EntityFrameworkCore;
+using Stella.FeatureManagement.Dashboard.Data;
 
 namespace Stella.FeatureManagement.Dashboard.EndPoints;
 
@@ -9,23 +10,23 @@ internal static class GetFeaturesExtension
 {
     public static RouteGroupBuilder MapGetFeatures(this RouteGroupBuilder routeGroup)
     {
-        routeGroup.MapGet("", async (IFeatureManager featureManager) =>
+        routeGroup.MapGet("", async (IDbContextFactory<FeatureFlagDbContext> contextFactory) =>
         {
-            var features = new List<FeatureState>();
-            await foreach (var featureName in featureManager.GetFeatureNamesAsync()
-                               .WithCancellation(CancellationToken.None))
-            {
-                var isEnabled = await featureManager.IsEnabledAsync(featureName);
-                features.Add(new FeatureState(featureName, isEnabled));
-            }
+            await using var context = await contextFactory.CreateDbContextAsync();
+            var features = await context.FeatureFlags
+                .Select(f => new FeatureState(f.Name, f.IsEnabled))
+                .ToListAsync();
 
             return features;
         }).Produces<List<FeatureState>>(200);
 
-        routeGroup.MapGet("{featureName}", async (string featureName, IFeatureManager featureManager) =>
+        routeGroup.MapGet("{featureName}", async (string featureName, IDbContextFactory<FeatureFlagDbContext> contextFactory) =>
         {
-            var isEnabled = await featureManager.IsEnabledAsync(featureName);
-            return isEnabled;
+            await using var context = await contextFactory.CreateDbContextAsync();
+            var feature = await context.FeatureFlags
+                .FirstOrDefaultAsync(f => f.Name == featureName);
+
+            return feature?.IsEnabled ?? false;
         }).Produces<bool>(200);
 
         return routeGroup;

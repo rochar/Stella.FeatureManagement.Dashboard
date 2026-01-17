@@ -12,8 +12,9 @@ internal static class DeleteFeaturesExtension
     {
         routeGroup.MapDelete("{featureName}", async (
             string featureName,
-            FeatureFlagDbContext context) =>
+            IDbContextFactory<FeatureFlagDbContext> contextFactory) =>
         {
+            await using var context = await contextFactory.CreateDbContextAsync();
             var feature = await context.FeatureFlags
                 .FirstOrDefaultAsync(f => f.Name == featureName);
 
