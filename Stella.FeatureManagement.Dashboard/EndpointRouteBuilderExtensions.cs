@@ -43,7 +43,9 @@ public static class EndpointRouteBuilderExtensions
         routeGroup
             .MapStaticDashboard()
             .MapGetFeatures()
-            .MapPutFeatures();
+            .MapPostFeatures()
+            .MapPutFeatures()
+            .MapDeleteFeatures();
     }
 
 

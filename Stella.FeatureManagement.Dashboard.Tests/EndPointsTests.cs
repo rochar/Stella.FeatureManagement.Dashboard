@@ -86,5 +86,36 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task WhenDeleteExistingFeatureReturnsNoContent()
+    {
+        // Arrange - Create a feature to delete
+        var featureName = $"FeatureToDelete_{Guid.NewGuid():N}";
+        var createRequest = new { FeatureName = featureName, IsEnabled = true };
+        var createResponse = await _client.PostAsJsonAsync("/features", createRequest, TestContext.Current.CancellationToken);
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        
+        // Act
+        var response = await _client.DeleteAsync($"/features/{featureName}", TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Verify the feature is gone (FeatureManager returns false for non-existent features)
+        var getResponse = await _client.GetAsync($"/features/{featureName}", TestContext.Current.CancellationToken);
+        var content = await getResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        content.ShouldBe("false");
+    }
+
+    [Fact]
+    public async Task WhenDeleteFeatureNotFoundReturns404()
+    {
+        // Act
+        var response = await _client.DeleteAsync("/features/NonExistentFeature", TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
     private record FeatureStateResponse(string FeatureName, bool IsEnabled);
 }
