@@ -1,5 +1,6 @@
 using Shouldly;
 using System.Net;
+using System.Net.Http.Json;
 
 namespace Stella.FeatureManagement.Dashboard.Tests;
 
@@ -42,4 +43,48 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("text/css");
     }
+
+    [Theory]
+    [InlineData("MyFlag")]
+    [InlineData("AnotherFlag")]
+    public async Task WhenPutFeatureUpdatesState(string featureName)
+    {
+        // Arrange - Get current state first
+        var getInitialResponse = await _client.GetAsync($"/features/{featureName}", TestContext.Current.CancellationToken);
+        var initialContent = await getInitialResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var initialState = bool.Parse(initialContent);
+        var newState = !initialState;
+
+        var request = new { IsEnabled = newState };
+
+        // Act
+        var response = await _client.PutAsJsonAsync($"/features/{featureName}", request, TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.FeatureName.ShouldBe(featureName);
+        result.IsEnabled.ShouldBe(newState);
+
+        // Verify the change persisted
+        var getResponse = await _client.GetAsync($"/features/{featureName}", TestContext.Current.CancellationToken);
+        var content = await getResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        content.ShouldBe(newState.ToString().ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task WhenPutFeatureNotFoundReturns404()
+    {
+        // Arrange
+        var request = new { IsEnabled = true };
+
+        // Act
+        var response = await _client.PutAsJsonAsync("/features/NonExistentFeature", request, TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    private record FeatureStateResponse(string FeatureName, bool IsEnabled);
 }

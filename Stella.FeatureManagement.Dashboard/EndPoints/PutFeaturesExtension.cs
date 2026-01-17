@@ -1,4 +1,8 @@
-﻿using Microsoft.AspNetCore.Routing;
+﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
+using Stella.FeatureManagement.Dashboard.Data;
 
 namespace Stella.FeatureManagement.Dashboard.EndPoints;
 
@@ -6,25 +10,31 @@ internal static class PutFeaturesExtension
 {
     public static RouteGroupBuilder MapPutFeatures(this RouteGroupBuilder routeGroup)
     {
-        //routeGroup.MapGet("", async (IFeatureManager featureManager) =>
-        //{
-        //    var features = new List<FeatureState>();
-        //    await foreach (var featureName in featureManager.GetFeatureNamesAsync()
-        //                       .WithCancellation(CancellationToken.None))
-        //    {
-        //        var isEnabled = await featureManager.IsEnabledAsync(featureName);
-        //        features.Add(new FeatureState(featureName, isEnabled));
-        //    }
+        routeGroup.MapPut("{featureName}", async (
+            string featureName,
+            UpdateFeatureRequest request,
+            FeatureFlagDbContext context) =>
+        {
+            var feature = await context.FeatureFlags
+                .FirstOrDefaultAsync(f => f.Name == featureName);
 
-        //    return features;
-        //}).Produces<List<FeatureState>>(200);
+            if (feature is null)
+            {
+                return Results.NotFound(new { message = $"Feature '{featureName}' not found." });
+            }
 
-        //routeGroup.MapGet("{featureName}", async (string featureName, IFeatureManager featureManager) =>
-        //{
-        //    var isEnabled = await featureManager.IsEnabledAsync(featureName);
-        //    return isEnabled;
-        //}).Produces<bool>(200);
+            feature.IsEnabled = request.IsEnabled;
+            feature.UpdatedAt = DateTime.UtcNow;
+
+            await context.SaveChangesAsync();
+
+            return Results.Ok(new FeatureState(feature.Name, feature.IsEnabled));
+        })
+        .Produces<FeatureState>(200)
+        .Produces(404);
 
         return routeGroup;
     }
 }
+
+internal record UpdateFeatureRequest(bool IsEnabled);
