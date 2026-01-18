@@ -729,10 +729,29 @@ h1 {
 
 /* Footer */
 .footer {
-  text-align: center;
-  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 0;
   color: var(--color-text-secondary);
-  font-size: 0.875rem;
+  font-size: 0.8rem;
+}
+
+.footer-updated {
+  opacity: 0.7;
+}
+
+.footer-brand {
+  opacity: 0.4;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  transition: opacity 0.15s ease;
+}
+
+.footer-brand:hover {
+  opacity: 0.7;
 }
 
 /* Responsive */
