@@ -14,7 +14,7 @@ internal static class GetFeaturesExtension
         {
             await using var context = await contextFactory.CreateDbContextAsync();
             var features = await context.FeatureFlags
-                .Select(f => new FeatureState(f.Name, f.IsEnabled))
+                .Select(f => new FeatureState(f.Name, f.IsEnabled, "My feature description"))
                 .ToListAsync();
 
             return features;
@@ -33,4 +33,4 @@ internal static class GetFeaturesExtension
     }
 }
 
-internal record FeatureState(string FeatureName, bool IsEnabled);
+internal record FeatureState(string FeatureName, bool IsEnabled, string Description);

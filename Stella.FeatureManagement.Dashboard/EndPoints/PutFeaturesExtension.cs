@@ -29,7 +29,7 @@ internal static class PutFeaturesExtension
 
             await context.SaveChangesAsync();
 
-            return Results.Ok(new FeatureState(feature.Name, feature.IsEnabled));
+            return Results.Ok(new FeatureState(feature.Name, feature.IsEnabled, "My feature description"));
         })
         .Produces<FeatureState>(200)
         .Produces(404);

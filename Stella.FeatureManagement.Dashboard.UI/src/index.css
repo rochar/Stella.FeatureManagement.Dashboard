@@ -467,9 +467,9 @@ h1 {
 
 .feature-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 18px 24px;
+  gap: 12px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--color-border);
   transition: background-color 0.15s ease;
 }
@@ -482,9 +482,16 @@ h1 {
   background-color: var(--color-bg);
 }
 
+.feature-item:hover .delete-btn {
+  opacity: 1;
+}
+
 .feature-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .feature-name {
@@ -494,35 +501,37 @@ h1 {
   word-break: break-word;
 }
 
-.feature-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.feature-description {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  font-weight: 400;
+  line-height: 1.4;
 }
 
 .delete-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border: none;
+  border-radius: 6px;
   cursor: pointer;
   color: var(--color-text-secondary);
-  transition: all 0.2s ease;
+  opacity: 0;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .delete-btn:hover {
   background: var(--color-danger-bg);
-  border-color: var(--color-danger);
   color: var(--color-danger);
 }
 
 .delete-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 /* Status Badge */

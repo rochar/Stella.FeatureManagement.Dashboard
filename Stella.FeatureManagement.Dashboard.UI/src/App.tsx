@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 interface FeatureState {
   featureName: string
   isEnabled: boolean
+  description: string
 }
 
 // API base path - use VITE_API_URL if available (Aspire), otherwise fall back to relative path
@@ -294,32 +295,31 @@ export default function App() {
             ) : (
               filteredFeatures.map(f => (
                 <div key={f.featureName} className="feature-item">
+                  <button
+                    className="delete-btn"
+                    onClick={() => setDeleteTarget(f.featureName)}
+                    aria-label={`Delete ${f.featureName}`}
+                    title="Delete feature"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
+                    </svg>
+                  </button>
                   <div className="feature-info">
                     <span className="feature-name">{f.featureName}</span>
+                    <span className="feature-description">{f.description}</span>
                   </div>
-                  <div className="feature-actions">
-                    <button
-                      className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
-                      onClick={() => toggleFeature(f.featureName, f.isEnabled)}
-                      disabled={updating === f.featureName}
-                      aria-label={`Toggle ${f.featureName}`}
-                    >
-                      <span className="toggle-track">
-                        <span className="toggle-thumb"></span>
-                      </span>
-                      <span className="toggle-text">{f.isEnabled ? 'Enabled' : 'Disabled'}</span>
-                    </button>
-                    <button
-                      className="delete-btn"
-                      onClick={() => setDeleteTarget(f.featureName)}
-                      aria-label={`Delete ${f.featureName}`}
-                      title="Delete feature"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
-                      </svg>
-                    </button>
-                  </div>
+                  <button
+                    className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
+                    onClick={() => toggleFeature(f.featureName, f.isEnabled)}
+                    disabled={updating === f.featureName}
+                    aria-label={`Toggle ${f.featureName}`}
+                  >
+                    <span className="toggle-track">
+                      <span className="toggle-thumb"></span>
+                    </span>
+                    <span className="toggle-text">{f.isEnabled ? 'Enabled' : 'Disabled'}</span>
+                  </button>
                 </div>
               ))
             )}

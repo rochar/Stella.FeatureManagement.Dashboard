@@ -34,7 +34,7 @@ internal static class PostFeaturesExtension
             context.FeatureFlags.Add(feature);
             await context.SaveChangesAsync();
 
-            return Results.Created($"/features/{feature.Name}", new FeatureState(feature.Name, feature.IsEnabled));
+            return Results.Created($"/features/{feature.Name}", new FeatureState(feature.Name, feature.IsEnabled, "My feature description"));
         })
         .Produces<FeatureState>(201)
         .Produces(409);
