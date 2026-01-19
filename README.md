@@ -40,17 +40,17 @@ builder.Services.AddFeatureManagement()
 
 var app = builder.Build();
 
-// Map the dashboard endpoints and migrate database
-await app.UseFeaturesDashboardAsync(configure: (o) =>
+// Map the dashboard endpoints
+app.MapFeaturesDashboardEndpoints();
+// Ipdate features database model
+await app.MigrateFeaturesDatabaseAsync();
+//Ensure default features are initialized
+await app.InitializeFeaturesDashboardAsync(configure: (o) =>
 {
-    o.AddIfNotExists = new Dictionary<string, bool>
-    {
-        { "MyFlag", true },
-        { "AnotherFlag", false }
-    };
+     { "MyFlag", new FeatureConfig(true, "My feature flag description") },
+        { "AnotherFlag", new FeatureConfig(false) }
 });
     
-
 app.Run();
 ```
 

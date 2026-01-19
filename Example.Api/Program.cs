@@ -40,19 +40,19 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-await app.MigrateFeaturesDashboardAsync();
-await app.UseFeaturesDashboardAsync((o) =>
+app.MapFeaturesDashboardEndpoints(configureCors: policy => policy
+    .AllowAnyOrigin()
+    .AllowAnyMethod()
+    .AllowAnyHeader());
+await app.MigrateFeaturesDatabaseAsync();
+await app.InitializeFeaturesDashboardAsync((o) =>
 {
     o.AddIfNotExists = new Dictionary<string, FeatureConfig>
     {
         { "MyFlag", new FeatureConfig(true, "My feature flag description") },
         { "AnotherFlag", new FeatureConfig(false) }
     };
-},
-    configureCors: policy => policy
-        .AllowAnyOrigin()
-        .AllowAnyMethod()
-        .AllowAnyHeader());
+});
 
 app.Run();
 
