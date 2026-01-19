@@ -16,6 +16,11 @@ public class FeatureFlag
     public required string Name { get; set; }
 
     /// <summary>
+    /// Gets or sets the feature description.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
     /// Gets or sets whether the feature is enabled.
     /// When true and no filters exist, feature is always on.
     /// When true with filters, all filters must pass.

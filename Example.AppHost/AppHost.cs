@@ -4,9 +4,10 @@ var builder = DistributedApplication.CreateBuilder(args);
 var postgresPassword = builder.AddParameter("postgres-password", secret: true);
 
 var postgres = builder.AddPostgres("postgres", password: postgresPassword)
-    .WithHostPort(5432)
-    .WithPgAdmin()
-    .AddDatabase("exampledb");
+.WithHostPort(5432)
+.WithDataVolume()
+.WithPgAdmin()
+.AddDatabase("exampledb");
 
 // Add your existing API project with a reference to the database
 var api = builder.AddProject<Projects.Example_Api>("api")

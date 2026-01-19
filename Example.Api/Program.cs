@@ -41,13 +41,13 @@ if (app.Environment.IsDevelopment())
 }
 
 await app.UseFeaturesDashboardAsync((o) =>
+{
+    o.AddIfNotExists = new Dictionary<string, FeatureConfig>
     {
-        o.AddIfNotExists = new Dictionary<string, bool>
-        {
-            { "MyFlag", true },
-            { "AnotherFlag", false }
-        };
-    },
+        { "MyFlag", new FeatureConfig(true, "My feature flag description") },
+        { "AnotherFlag", new FeatureConfig(false) }
+    };
+},
     configureCors: policy => policy
         .AllowAnyOrigin()
         .AllowAnyMethod()

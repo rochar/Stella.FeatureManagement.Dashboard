@@ -58,7 +58,7 @@ internal sealed class DashboardInitializer(FeatureFlagDbContext context, ILogger
 
     private async Task AddFeaturesIfNotExists(DashboardOptions options, CancellationToken cancellationToken)
     {
-        foreach (var (featureName, isEnabled) in options.AddIfNotExists)
+        foreach (var (featureName, definition) in options.AddIfNotExists)
         {
             var exists = await context.FeatureFlags.AnyAsync(f => f.Name == featureName, cancellationToken);
             if (!exists)
@@ -66,12 +66,13 @@ internal sealed class DashboardInitializer(FeatureFlagDbContext context, ILogger
                 context.FeatureFlags.Add(new FeatureFlag
                 {
                     Name = featureName,
-                    IsEnabled = isEnabled,
+                    IsEnabled = definition.IsEnabled,
+                    Description = definition.Description,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 });
                 logger.LogInformation("Adding feature flag: {FeatureName} with IsEnabled={IsEnabled}", featureName,
-                    isEnabled);
+                    definition.IsEnabled);
             }
         }
     }
