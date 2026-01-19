@@ -42,7 +42,7 @@ var app = builder.Build();
 
 // Map the dashboard endpoints
 app.MapFeaturesDashboardEndpoints();
-// Ipdate features database model
+// Update features database model
 await app.MigrateFeaturesDatabaseAsync();
 //Ensure default features are initialized
 await app.InitializeFeaturesDashboardAsync(configure: (o) =>
