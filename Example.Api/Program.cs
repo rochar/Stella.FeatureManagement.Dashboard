@@ -40,6 +40,7 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
+await app.MigrateFeaturesDashboardAsync();
 await app.UseFeaturesDashboardAsync((o) =>
 {
     o.AddIfNotExists = new Dictionary<string, FeatureConfig>

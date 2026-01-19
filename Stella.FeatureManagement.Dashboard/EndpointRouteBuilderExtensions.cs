@@ -13,6 +13,31 @@ namespace Stella.FeatureManagement.Dashboard;
 public static class EndpointRouteBuilderExtensions
 {
     /// <summary>
+    /// Applies pending database migrations for the Feature Management Dashboard.
+    /// Creates the database if it does not exist.
+    /// </summary>
+    /// <param name="routeBuilder">The <see cref="IEndpointRouteBuilder"/> to access services.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous migration operation.</returns>
+    public static async Task MigrateFeaturesDashboardAsync(this IEndpointRouteBuilder routeBuilder,
+        CancellationToken cancellationToken = default)
+    {
+        await using var scope = routeBuilder.ServiceProvider.CreateAsyncScope();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
+            .CreateLogger(typeof(EndpointRouteBuilderExtensions));
+
+        var initializer = scope.ServiceProvider.GetService<IDashboardInitializer>();
+
+        if (initializer is null)
+        {
+            logger.LogError("Cannot apply migrations: IDashboardInitializer is not registered.");
+            return;
+        }
+
+        await initializer.RunMigrationsAsync(cancellationToken);
+    }
+
+    /// <summary>
     /// Creates a route group and maps the Feature Management Dashboard endpoints to it.
     /// </summary>
     /// <param name="routeBuilder">The <see cref="IEndpointRouteBuilder"/> to add dashboard endpoints to.</param>
@@ -61,11 +86,10 @@ public static class EndpointRouteBuilderExtensions
 
         if (applier is null)
         {
-            logger.LogError("Cannot apply feature options: IFeatureOptionsApplier is not registered.");
+            logger.LogError("Cannot apply feature options: IDashboardInitializer is not registered.");
             return;
         }
 
-        await applier.RunMigrationsAsync(cancellationToken);
         await applier.ApplyDashboardOptionsAsync(options, cancellationToken);
     }
 }
