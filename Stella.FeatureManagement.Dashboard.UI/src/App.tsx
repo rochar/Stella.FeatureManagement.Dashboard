@@ -1,9 +1,15 @@
 import { useEffect, useState, useCallback } from 'react'
 
+interface FeatureFilter {
+  filterType: string
+  parameters: string | null
+}
+
 interface FeatureState {
   name: string
   isEnabled: boolean
   description: string | null
+  filters: FeatureFilter[]
 }
 
 // API base path - use VITE_API_URL if available (Aspire), otherwise fall back to relative path
@@ -23,6 +29,11 @@ export default function App() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [expandedFeature, setExpandedFeature] = useState<string | null>(null)
+  const [editingFilter, setEditingFilter] = useState<{ featureName: string; filterIndex: number } | null>(null)
+  const [editedParams, setEditedParams] = useState('')
+  const [jsonError, setJsonError] = useState<string | null>(null)
+  const [savingFilter, setSavingFilter] = useState(false)
 
   const fetchFeatures = useCallback(async () => {
     try {
@@ -139,6 +150,83 @@ export default function App() {
       setDeleting(false)
     }
   }, [deleteTarget])
+
+  const startEditingFilter = useCallback((featureName: string, filterIndex: number, currentParams: string | null) => {
+    setEditingFilter({ featureName, filterIndex })
+    setEditedParams(currentParams ? JSON.stringify(JSON.parse(currentParams), null, 2) : '{}')
+    setJsonError(null)
+  }, [])
+
+  const cancelEditingFilter = useCallback(() => {
+    setEditingFilter(null)
+    setEditedParams('')
+    setJsonError(null)
+  }, [])
+
+  const validateJson = useCallback((value: string): boolean => {
+    try {
+      JSON.parse(value)
+      setJsonError(null)
+      return true
+    } catch {
+      setJsonError('Invalid JSON format')
+      return false
+    }
+  }, [])
+
+  const handleParamsChange = useCallback((value: string) => {
+    setEditedParams(value)
+    if (value.trim()) {
+      validateJson(value)
+    } else {
+      setJsonError(null)
+    }
+  }, [validateJson])
+
+  const saveFilterParams = useCallback(async () => {
+    if (!editingFilter) return
+    if (!validateJson(editedParams)) return
+
+    const feature = features.find(f => f.name === editingFilter.featureName)
+    if (!feature) return
+
+    const filter = feature.filters[editingFilter.filterIndex]
+    if (!filter) return
+
+    setSavingFilter(true)
+    setError(null)
+
+    try {
+      const res = await fetch(`${API_BASE}/${feature.name}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isEnabled: feature.isEnabled,
+          description: feature.description,
+          filter: {
+            filterType: filter.filterType,
+            parameters: JSON.stringify(JSON.parse(editedParams))
+          }
+        })
+      })
+
+      if (!res.ok) {
+        throw new Error(`Failed to update filter (${res.status})`)
+      }
+
+      const updated = await res.json()
+      setFeatures(prev =>
+        prev.map(f => f.name === feature.name ? updated : f)
+      )
+      setEditingFilter(null)
+      setEditedParams('')
+      setLastUpdated(new Date())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update filter')
+    } finally {
+      setSavingFilter(false)
+    }
+  }, [editingFilter, editedParams, features, validateJson])
 
   useEffect(() => {
     fetchFeatures()
@@ -294,32 +382,111 @@ export default function App() {
               </div>
             ) : (
               filteredFeatures.map(f => (
-                <div key={f.name} className="feature-item">
-                  <button
-                    className="delete-btn"
-                    onClick={() => setDeleteTarget(f.name)}
-                    aria-label={`Delete ${f.name}`}
-                    title="Delete feature"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
+                <div key={f.name} className={`feature-item ${expandedFeature === f.name ? 'expanded' : ''}`}>
+                  <div className="feature-row" onClick={() => setExpandedFeature(expandedFeature === f.name ? null : f.name)}>
+                    <button
+                      className="delete-btn"
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(f.name); }}
+                      aria-label={`Delete ${f.name}`}
+                      title="Delete feature"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
+                      </svg>
+                    </button>
+                    <div className="feature-info">
+                      <span className="feature-name">
+                        {f.name}
+                        {f.filters.length > 0 && (
+                          <span className="filter-badge" title={`${f.filters.length} filter(s)`}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+                            </svg>
+                            {f.filters.length}
+                          </span>
+                        )}
+                      </span>
+                      <span className="feature-description">{f.description}</span>
+                    </div>
+                    <button
+                      className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
+                      onClick={(e) => { e.stopPropagation(); toggleFeature(f.name, f.isEnabled); }}
+                      disabled={updating === f.name}
+                      aria-label={`Toggle ${f.name}`}
+                    >
+                      <span className="toggle-track">
+                        <span className="toggle-thumb"></span>
+                      </span>
+                      <span className="toggle-text">{f.isEnabled ? 'Enabled' : 'Disabled'}</span>
+                    </button>
+                    <svg className={`expand-icon ${expandedFeature === f.name ? 'rotated' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M6 9l6 6 6-6" />
                     </svg>
-                  </button>
-                  <div className="feature-info">
-                    <span className="feature-name">{f.name}</span>
-                    <span className="feature-description">{f.description}</span>
                   </div>
-                  <button
-                    className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
-                    onClick={() => toggleFeature(f.name, f.isEnabled)}
-                    disabled={updating === f.name}
-                    aria-label={`Toggle ${f.name}`}
-                  >
-                    <span className="toggle-track">
-                      <span className="toggle-thumb"></span>
-                    </span>
-                    <span className="toggle-text">{f.isEnabled ? 'Enabled' : 'Disabled'}</span>
-                  </button>
+                  {expandedFeature === f.name && (
+                    <div className="feature-details">
+                      {f.filters.length === 0 ? (
+                        <p className="no-filters">No filters configured for this feature.</p>
+                      ) : (
+                        <div className="filters-section">
+                          {f.filters.map((filter, idx) => {
+                            const isEditing = editingFilter?.featureName === f.name && editingFilter?.filterIndex === idx
+                            return (
+                              <div key={idx} className="filter-item">
+                                <div className="filter-header">
+                                  <div className="filter-type">{filter.filterType}</div>
+                                  {!isEditing && filter.parameters && (
+                                    <button
+                                      className="edit-filter-btn"
+                                      onClick={() => startEditingFilter(f.name, idx, filter.parameters)}
+                                      title="Edit parameters"
+                                    >
+                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                </div>
+                                {filter.parameters && (
+                                  isEditing ? (
+                                    <div className="filter-edit">
+                                      <textarea
+                                        className={`filter-params-input ${jsonError ? 'error' : ''}`}
+                                        value={editedParams}
+                                        onChange={(e) => handleParamsChange(e.target.value)}
+                                        disabled={savingFilter}
+                                        rows={6}
+                                      />
+                                      {jsonError && <span className="json-error">{jsonError}</span>}
+                                      <div className="filter-edit-actions">
+                                        <button
+                                          className="filter-btn filter-btn-cancel"
+                                          onClick={cancelEditingFilter}
+                                          disabled={savingFilter}
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          className="filter-btn filter-btn-save"
+                                          onClick={saveFilterParams}
+                                          disabled={savingFilter || !!jsonError}
+                                        >
+                                          {savingFilter ? <span className="btn-loading"></span> : 'Save'}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <pre className="filter-params">{JSON.stringify(JSON.parse(filter.parameters), null, 2)}</pre>
+                                  )
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))
             )}

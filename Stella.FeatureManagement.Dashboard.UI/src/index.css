@@ -466,10 +466,6 @@ h1 {
 }
 
 .feature-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
   border-bottom: 1px solid var(--color-border);
   transition: background-color 0.15s ease;
 }
@@ -480,6 +476,225 @@ h1 {
 
 .feature-item:hover {
   background-color: var(--color-bg);
+}
+
+.feature-item.expanded {
+  background-color: var(--color-bg);
+}
+
+.feature-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  cursor: pointer;
+}
+
+.expand-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.expand-icon.rotated {
+  transform: rotate(180deg);
+}
+
+.filter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: var(--color-primary);
+  color: white;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.filter-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+.feature-details {
+  padding: 0 20px 16px 64px;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.no-filters {
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.filters-section h4 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+.filter-item {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.filter-item:last-child {
+  margin-bottom: 0;
+}
+
+.filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.filter-type {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.edit-filter-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: all 0.15s ease;
+}
+
+.edit-filter-btn:hover {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.edit-filter-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.filter-params {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 12px;
+  border-radius: 6px;
+  font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  font-size: 0.8rem;
+  overflow-x: auto;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.filter-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-params-input {
+  width: 100%;
+  padding: 12px;
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 2px solid var(--color-border);
+  border-radius: 6px;
+  font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 100px;
+}
+
+.filter-params-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.filter-params-input.error {
+  border-color: var(--color-danger);
+}
+
+.filter-params-input:disabled {
+  opacity: 0.6;
+}
+
+.json-error {
+  color: var(--color-danger);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.filter-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.filter-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-width: 70px;
+}
+
+.filter-btn-cancel {
+  background: var(--color-card);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.filter-btn-cancel:hover:not(:disabled) {
+  background: var(--color-bg);
+}
+
+.filter-btn-save {
+  background: var(--color-primary);
+  color: white;
+}
+
+.filter-btn-save:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+}
+
+.filter-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .feature-info {
