@@ -14,7 +14,7 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
     public async Task WhenGetFeatureByNameIsEnabled(string featureName, bool isEnabled)
     {
         // Act
-        var response = await _client.GetAsync($"/features/{featureName}", TestContext.Current.CancellationToken);
+        var response = await _client.GetAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -50,7 +50,8 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
     public async Task WhenPutFeatureUpdatesState(string featureName)
     {
         // Arrange - Get current state first
-        var getInitialResponse = await _client.GetAsync($"/features/{featureName}", TestContext.Current.CancellationToken);
+        var getInitialResponse = await _client.GetAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", TestContext.Current.CancellationToken);
+
         var initialContent = await getInitialResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var initialState = bool.Parse(initialContent);
         var newState = !initialState;
@@ -58,7 +59,7 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
         var request = new { IsEnabled = newState };
 
         // Act
-        var response = await _client.PutAsJsonAsync($"/features/{featureName}", request, TestContext.Current.CancellationToken);
+        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", request, TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -68,7 +69,7 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
         result.IsEnabled.ShouldBe(newState);
 
         // Verify the change persisted
-        var getResponse = await _client.GetAsync($"/features/{featureName}", TestContext.Current.CancellationToken);
+        var getResponse = await _client.GetAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", TestContext.Current.CancellationToken);
         var content = await getResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         content.ShouldBe(newState.ToString().ToLowerInvariant());
     }
@@ -80,7 +81,7 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
         var request = new { IsEnabled = true };
 
         // Act
-        var response = await _client.PutAsJsonAsync("/features/NonExistentFeature", request, TestContext.Current.CancellationToken);
+        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/NonExistentFeature", request, TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -92,17 +93,17 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
         // Arrange - Create a feature to delete
         var featureName = $"FeatureToDelete_{Guid.NewGuid():N}";
         var createRequest = new { FeatureName = featureName, IsEnabled = true };
-        var createResponse = await _client.PostAsJsonAsync("/features", createRequest, TestContext.Current.CancellationToken);
+        var createResponse = await _client.PostAsJsonAsync($"{WebApp.ApiBaseUrl}/features", createRequest, TestContext.Current.CancellationToken);
         createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
-        
+
         // Act
-        var response = await _client.DeleteAsync($"/features/{featureName}", TestContext.Current.CancellationToken);
+        var response = await _client.DeleteAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         // Verify the feature is gone (FeatureManager returns false for non-existent features)
-        var getResponse = await _client.GetAsync($"/features/{featureName}", TestContext.Current.CancellationToken);
+        var getResponse = await _client.GetAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", TestContext.Current.CancellationToken);
         var content = await getResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         content.ShouldBe("false");
     }

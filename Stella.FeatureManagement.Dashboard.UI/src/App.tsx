@@ -8,8 +8,8 @@ interface FeatureState {
 
 // API base path - use VITE_API_URL if available (Aspire), otherwise fall back to relative path
 const API_BASE = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL}/features` 
-  : '..'
+  ? `${import.meta.env.VITE_API_URL}/features/dashboardapi/features` 
+  : '../dashboardapi/features'
 
 export default function App() {
   const [features, setFeatures] = useState<FeatureState[]>([])

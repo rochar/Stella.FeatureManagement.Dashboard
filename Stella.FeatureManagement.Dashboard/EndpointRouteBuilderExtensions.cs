@@ -67,7 +67,12 @@ public static class EndpointRouteBuilderExtensions
     }
 
     /// <summary>
-    /// Creates a route group and maps the Feature Management Dashboard endpoints to it.
+    /// Maps the Feature Management Dashboard endpoints to the specified route group.
+    /// Creates two route groups:
+    /// <list type="bullet">
+    ///   <item><description><c>{group}/dashboard</c> - Serves the static dashboard UI.</description></item>
+    ///   <item><description><c>{group}/dashboardapi/features</c> - Exposes the feature flags CRUD API.</description></item>
+    /// </list>
     /// </summary>
     /// <param name="routeBuilder">The <see cref="IEndpointRouteBuilder"/> to add dashboard endpoints to.</param>
     /// <param name="group">The route prefix for the dashboard endpoints. Defaults to "/features".</param>
@@ -77,15 +82,18 @@ public static class EndpointRouteBuilderExtensions
         string group = "/features",
         Action<CorsPolicyBuilder>? configureCors = null)
     {
-        var routeGroup = routeBuilder.MapGroup(group);
+        var dashboardGroup = routeBuilder.MapGroup($"{group}/dashboard");
+        var dashboardApi = routeBuilder.MapGroup($"{group}/dashboardapi/features");
 
         if (configureCors is not null)
         {
-            routeGroup.RequireCors(configureCors);
+            dashboardGroup.RequireCors(configureCors);
+            dashboardApi.RequireCors(configureCors);
         }
 
-        routeGroup
-            .MapStaticDashboard()
+        dashboardGroup
+            .MapStaticDashboard();
+        dashboardApi
             .MapGetFeatures()
             .MapPostFeatures()
             .MapPutFeatures()

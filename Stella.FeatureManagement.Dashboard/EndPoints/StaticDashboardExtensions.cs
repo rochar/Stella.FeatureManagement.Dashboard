@@ -15,7 +15,7 @@ namespace Stella.FeatureManagement.Dashboard.EndPoints
             var embeddedProvider = new ManifestEmbeddedFileProvider(
                 typeof(EndpointRouteBuilderExtensions).Assembly, "wwwroot");
 
-            routeGroup.MapGet("dashboard/{**path}", (HttpContext context, string? path) =>
+            routeGroup.MapGet("{**path}", (HttpContext context, string? path) =>
             {
                 var encodedPath = context.Request.GetEncodedPathAndQuery(); // Path + query only
 
