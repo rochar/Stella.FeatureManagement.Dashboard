@@ -112,7 +112,7 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
     public async Task WhenDeleteFeatureNotFoundReturns404()
     {
         // Act
-        var response = await _client.DeleteAsync("/features/NonExistentFeature", TestContext.Current.CancellationToken);
+        var response = await _client.DeleteAsync($"{WebApp.ApiBaseUrl}/features/NonExistentFeature", TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
