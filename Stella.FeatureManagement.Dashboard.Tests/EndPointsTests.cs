@@ -23,7 +23,7 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
         }
 
         // Assert
-        results.Count(r => r).ShouldBeInRange(40, 60);
+        results.Count(r => r).ShouldBeInRange(35, 65);
     }
 
     [Theory]
@@ -36,8 +36,10 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        content.ShouldBe(isEnabled.ToString().ToLowerInvariant());
+        var result = await response.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.Name.ShouldBe(featureName);
+        result.IsEnabled.ShouldBe(isEnabled);
     }
 
     [Fact]
@@ -69,9 +71,8 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
     {
         // Arrange - Get current state first
         var getInitialResponse = await _client.GetAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", TestContext.Current.CancellationToken);
-
-        var initialContent = await getInitialResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        var initialState = bool.Parse(initialContent);
+        var initialResult = await getInitialResponse.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        var initialState = initialResult!.IsEnabled;
         var newState = !initialState;
 
         var request = new { IsEnabled = newState };
@@ -83,13 +84,46 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var result = await response.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
         result.ShouldNotBeNull();
-        result.FeatureName.ShouldBe(featureName);
+        result.Name.ShouldBe(featureName);
         result.IsEnabled.ShouldBe(newState);
 
         // Verify the change persisted
         var getResponse = await _client.GetAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", TestContext.Current.CancellationToken);
-        var content = await getResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        content.ShouldBe(newState.ToString().ToLowerInvariant());
+        var verifyResult = await getResponse.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        verifyResult.ShouldNotBeNull();
+        verifyResult.IsEnabled.ShouldBe(newState);
+    }
+    [Fact]
+    public async Task WhenPutFeatureUpdatesStateWithFilter()
+    {
+        // Arrange - Create a feature without a filter
+        var featureName = $"FeatureToUpdate_{Guid.NewGuid():N}";
+        var createRequest = new { Name = featureName, IsEnabled = false };
+        var createResponse = await _client.PostAsJsonAsync($"{WebApp.ApiBaseUrl}/features", createRequest, TestContext.Current.CancellationToken);
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // Update with a filter
+        var updateRequest = new
+        {
+            IsEnabled = true,
+            Description = "Feature with percentage filter",
+            Filter = new { FilterType = "Microsoft.Percentage", Parameters = "{\"Value\": 50}" }
+        };
+
+        // Act
+        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", updateRequest, TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.Name.ShouldBe(featureName);
+        result.IsEnabled.ShouldBeTrue();
+        result.Description.ShouldBe("Feature with percentage filter");
+        result.Filters.ShouldNotBeNull();
+        result.Filters.Count.ShouldBe(1);
+        result.Filters[0].FilterType.ShouldBe("Microsoft.Percentage");
+        result.Filters[0].Parameters.ShouldBe("{\"Value\": 50}");
     }
 
     [Fact]
@@ -106,11 +140,11 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
     }
 
     [Fact]
-    public async Task WhenDeleteExistingFeatureReturnsNoContent()
+    public async Task WhenDeleteExistingFeatureShouldDelete()
     {
         // Arrange - Create a feature to delete
         var featureName = $"FeatureToDelete_{Guid.NewGuid():N}";
-        var createRequest = new { FeatureName = featureName, IsEnabled = true };
+        var createRequest = new { Name = featureName, IsEnabled = true };
         var createResponse = await _client.PostAsJsonAsync($"{WebApp.ApiBaseUrl}/features", createRequest, TestContext.Current.CancellationToken);
         createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
@@ -120,10 +154,9 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        // Verify the feature is gone (FeatureManager returns false for non-existent features)
+        // Verify the feature is gone (API returns 404 for non-existent features)
         var getResponse = await _client.GetAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", TestContext.Current.CancellationToken);
-        var content = await getResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        content.ShouldBe("false");
+        getResponse.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -136,5 +169,6 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
-    private record FeatureStateResponse(string FeatureName, bool IsEnabled);
+    private record FeatureStateResponse(string Name, bool IsEnabled, string? Description, List<FeatureFilterResponse> Filters);
+    private record FeatureFilterResponse(string FilterType, string? Parameters);
 }

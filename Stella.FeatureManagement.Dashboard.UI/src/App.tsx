@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 
 interface FeatureState {
-  featureName: string
+  name: string
   isEnabled: boolean
-  description: string
+  description: string | null
 }
 
 // API base path - use VITE_API_URL if available (Aspire), otherwise fall back to relative path
@@ -47,7 +47,7 @@ export default function App() {
     // Optimistic update
     setFeatures(prev =>
       prev.map(feature =>
-        feature.featureName === featureName
+        feature.name === featureName
           ? { ...feature, isEnabled: newState }
           : feature
       )
@@ -69,7 +69,7 @@ export default function App() {
       // Revert on error
       setFeatures(prev =>
         prev.map(feature =>
-          feature.featureName === featureName
+          feature.name === featureName
             ? { ...feature, isEnabled: currentState }
             : feature
         )
@@ -92,7 +92,7 @@ export default function App() {
       const res = await fetch(API_BASE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ featureName, isEnabled: false })
+        body: JSON.stringify({ name: featureName, isEnabled: false })
       })
 
       if (res.status === 409) {
@@ -130,7 +130,7 @@ export default function App() {
         throw new Error(`Failed to delete feature (${res.status})`)
       }
 
-      setFeatures(prev => prev.filter(f => f.featureName !== deleteTarget))
+      setFeatures(prev => prev.filter(f => f.name !== deleteTarget))
       setDeleteTarget(null)
       setLastUpdated(new Date())
     } catch (err) {
@@ -145,8 +145,8 @@ export default function App() {
   }, [fetchFeatures])
 
   const filteredFeatures = features
-    .filter(f => f.featureName.toLowerCase().includes(searchTerm.toLowerCase()))
-    .sort((a, b) => a.featureName.localeCompare(b.featureName))
+    .filter(f => f.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   const enabledCount = features.filter(f => f.isEnabled).length
   const disabledCount = features.length - enabledCount
@@ -294,11 +294,11 @@ export default function App() {
               </div>
             ) : (
               filteredFeatures.map(f => (
-                <div key={f.featureName} className="feature-item">
+                <div key={f.name} className="feature-item">
                   <button
                     className="delete-btn"
-                    onClick={() => setDeleteTarget(f.featureName)}
-                    aria-label={`Delete ${f.featureName}`}
+                    onClick={() => setDeleteTarget(f.name)}
+                    aria-label={`Delete ${f.name}`}
                     title="Delete feature"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -306,14 +306,14 @@ export default function App() {
                     </svg>
                   </button>
                   <div className="feature-info">
-                    <span className="feature-name">{f.featureName}</span>
+                    <span className="feature-name">{f.name}</span>
                     <span className="feature-description">{f.description}</span>
                   </div>
                   <button
                     className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
-                    onClick={() => toggleFeature(f.featureName, f.isEnabled)}
-                    disabled={updating === f.featureName}
-                    aria-label={`Toggle ${f.featureName}`}
+                    onClick={() => toggleFeature(f.name, f.isEnabled)}
+                    disabled={updating === f.name}
+                    aria-label={`Toggle ${f.name}`}
                   >
                     <span className="toggle-track">
                       <span className="toggle-thumb"></span>

@@ -16,6 +16,7 @@ internal static class DeleteFeaturesExtension
         {
             await using var context = await contextFactory.CreateDbContextAsync();
             var feature = await context.FeatureFlags
+                .Include(f => f.Filters)
                 .FirstOrDefaultAsync(f => f.Name == featureName);
 
             if (feature is null)
@@ -23,6 +24,7 @@ internal static class DeleteFeaturesExtension
                 return Results.NotFound(new { message = $"Feature '{featureName}' not found." });
             }
 
+            context.FeatureFilters.RemoveRange(feature.Filters);
             context.FeatureFlags.Remove(feature);
             await context.SaveChangesAsync();
 
