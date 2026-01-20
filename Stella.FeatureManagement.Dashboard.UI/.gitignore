@@ -1,0 +1,4 @@
+node_modules/
+dist/
+version.json
+.version.tmp

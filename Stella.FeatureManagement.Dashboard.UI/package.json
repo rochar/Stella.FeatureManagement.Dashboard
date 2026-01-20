@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "dotnet gitversion /showvariable SemVer > .version.tmp && node -e \"const v=require('fs').readFileSync('.version.tmp','utf8').trim(); require('fs').writeFileSync('version.json',JSON.stringify({version:v})); require('fs').unlinkSync('.version.tmp');\" && tsc && vite build",
+    "build:dev": "tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

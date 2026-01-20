@@ -536,7 +536,9 @@ export default function App() {
       {lastUpdated && (
         <footer className="footer">
           <span className="footer-updated">Last updated: {lastUpdated.toLocaleTimeString()}</span>
-          <a href="https://github.com/rochar/Stella.FeatureManagement.Dashboard" target="_blank" rel="noopener noreferrer" className="footer-brand">Stella.Apps</a>
+          <div className="footer-brand-container">            
+            <a href="https://github.com/rochar/Stella.FeatureManagement.Dashboard" target="_blank" rel="noopener noreferrer" className="footer-brand">Stella.Apps</a>            <span className="footer-version">v{__APP_VERSION__}</span>
+          </div>
         </footer>
       )}
     </div>
