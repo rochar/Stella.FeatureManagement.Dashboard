@@ -8,6 +8,24 @@ public class EndPointTests(WebApp webApp) : IClassFixture<WebApp>
 {
     private readonly HttpClient _client = webApp.CreateClient();
 
+
+    [Fact]
+    public async Task WhenGetFeatureWithPercentageFilterFromFeatureManager()
+    {
+        int numberOfRequests = 100;
+        var results = new List<bool>(numberOfRequests);
+        // Act
+        for (int i = 0; i < numberOfRequests; i++)
+        {
+            var response = await _client.GetAsync($"features/FilteredFlag", TestContext.Current.CancellationToken);
+            var content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+            results.Add(bool.Parse(content));
+        }
+
+        // Assert
+        results.Count(r => r).ShouldBeInRange(40, 60);
+    }
+
     [Theory]
     [InlineData("MyFlag", true)]
     [InlineData("AnotherFlag", false)]

@@ -30,28 +30,55 @@ internal sealed class DashboardInitializer(FeatureFlagDbContext context, ILogger
 
     private async Task AddOrUpdateFeatures(DashboardOptions options, CancellationToken cancellationToken)
     {
-        foreach (var (featureName, isEnabled) in options.AddOrUpdate)
+        foreach (var (featureName, definition) in options.AddOrUpdate)
         {
-            var existing =
-                await context.FeatureFlags.FirstOrDefaultAsync(f => f.Name == featureName, cancellationToken);
+            var existing = await context.FeatureFlags
+                .Include(f => f.Filters)
+                .FirstOrDefaultAsync(f => f.Name == featureName, cancellationToken);
+
             if (existing is not null)
             {
-                existing.IsEnabled = isEnabled;
+                existing.IsEnabled = definition.IsEnabled;
+                existing.Description = definition.Description;
                 existing.UpdatedAt = DateTime.UtcNow;
+
+                // Clear existing filters and add new one if provided
+                existing.Filters.Clear();
+                if (definition.Filter is not null)
+                {
+                    existing.Filters.Add(new FeatureFilter
+                    {
+                        FilterType = definition.Filter.FilterType,
+                        Parameters = definition.Filter.Parameters
+                    });
+                }
+
                 logger.LogInformation("Updating feature flag: {FeatureName} with IsEnabled={IsEnabled}", featureName,
-                    isEnabled);
+                    definition.IsEnabled);
             }
             else
             {
-                context.FeatureFlags.Add(new FeatureFlag
+                var featureFlag = new FeatureFlag
                 {
                     Name = featureName,
-                    IsEnabled = isEnabled,
+                    IsEnabled = definition.IsEnabled,
+                    Description = definition.Description,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
-                });
+                };
+
+                if (definition.Filter is not null)
+                {
+                    featureFlag.Filters.Add(new FeatureFilter
+                    {
+                        FilterType = definition.Filter.FilterType,
+                        Parameters = definition.Filter.Parameters
+                    });
+                }
+
+                context.FeatureFlags.Add(featureFlag);
                 logger.LogInformation("Adding feature flag: {FeatureName} with IsEnabled={IsEnabled}", featureName,
-                    isEnabled);
+                    definition.IsEnabled);
             }
         }
     }
@@ -63,14 +90,25 @@ internal sealed class DashboardInitializer(FeatureFlagDbContext context, ILogger
             var exists = await context.FeatureFlags.AnyAsync(f => f.Name == featureName, cancellationToken);
             if (!exists)
             {
-                context.FeatureFlags.Add(new FeatureFlag
+                var featureFlag = new FeatureFlag
                 {
                     Name = featureName,
                     IsEnabled = definition.IsEnabled,
                     Description = definition.Description,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
-                });
+                };
+
+                if (definition.Filter is not null)
+                {
+                    featureFlag.Filters.Add(new FeatureFilter
+                    {
+                        FilterType = definition.Filter.FilterType,
+                        Parameters = definition.Filter.Parameters
+                    });
+                }
+
+                context.FeatureFlags.Add(featureFlag);
                 logger.LogInformation("Adding feature flag: {FeatureName} with IsEnabled={IsEnabled}", featureName,
                     definition.IsEnabled);
             }

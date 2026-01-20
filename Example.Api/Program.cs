@@ -50,7 +50,11 @@ await app.InitializeFeaturesDashboardAsync((o) =>
     o.AddIfNotExists = new Dictionary<string, FeatureConfig>
     {
         { "MyFlag", new FeatureConfig(true, "My feature flag description") },
-        { "AnotherFlag", new FeatureConfig(false) }
+        { "AnotherFlag", new FeatureConfig(false) },
+        {
+            "FilteredFlag",
+            new FeatureConfig(true, Filter: new FeatureFilterConfig("Microsoft.Percentage", "{\"Value\": \"50\"}"))
+        }
     };
 });
 
