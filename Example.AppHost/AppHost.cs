@@ -7,7 +7,7 @@ var postgres = builder.AddPostgres("postgres", password: postgresPassword)
 .WithHostPort(5432)
 .WithDataVolume()
 .WithPgAdmin()
-.AddDatabase("exampledb");
+.AddDatabase("features");
 
 // Add your existing API project with a reference to the database
 var api = builder.AddProject<Projects.Example_Api>("api")

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.FeatureManagement;
+using Microsoft.FeatureManagement.FeatureFilters;
 using Scalar.AspNetCore;
 using Stella.FeatureManagement.Dashboard;
 
@@ -26,7 +27,7 @@ builder.AddServiceDefaults();
 // Add Feature Management with Dashboard 
 builder.Services
     .AddFeatureManagement()
-    .AddFeaturesDashboard(options => options.UseNpgsql(builder.Configuration.GetConnectionString("exampledb")));
+    .AddFeaturesDashboard(options => options.UseNpgsql(builder.Configuration.GetConnectionString("features")));
 
 var app = builder.Build();
 
@@ -53,7 +54,8 @@ await app.InitializeFeaturesDashboardAsync((o) =>
         { "AnotherFlag", new FeatureConfig(false) },
         {
             "FilteredFlag",
-            new FeatureConfig(true, Filter: new FeatureFilterConfig("Microsoft.Percentage", "{\"Value\": \"50\"}"))
+            new FeatureConfig(true, Filter: new FeatureFilterConfig("Microsoft.Percentage",
+                new PercentageFilterSettings { Value = 50 }))
         }
     };
 });

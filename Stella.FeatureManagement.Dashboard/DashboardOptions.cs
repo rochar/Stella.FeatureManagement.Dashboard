@@ -11,14 +11,13 @@ public record FeatureConfig(bool IsEnabled, string? Description = null, FeatureF
 /// Feature filters configuration.
 /// </summary>
 /// <param name="FilterType">filter type (e.g., "Microsoft.Percentage", "Microsoft.TimeWindow", "Microsoft.Targeting", "Custom").</param>
-/// <param name="Parameters">
-/// sets the filter parameters as JSON.
+/// <param name="Parameters"> Converts to the specific filter parameters object to a Json.
 /// Examples:
 /// - Percentage: {"Value": "50"}
 /// - TimeWindow: {"Start": "2025-01-01", "End": "2025-12-31"}
 /// - Targeting: {"Audience": {"Users": ["user1"], "Groups": [{"Name": "Beta", "RolloutPercentage": "100"}]}}
 /// </param>
-public record FeatureFilterConfig(string FilterType, string? Parameters);
+public record FeatureFilterConfig(string FilterType, object? Parameters);
 
 /// <summary>
 /// Configuration options for the Feature Management Dashboard.

@@ -5,18 +5,11 @@ namespace Stella.FeatureManagement.Dashboard.Data;
 /// <summary>
 /// Simple DbContext factory implementation for creating DbContext instances.
 /// </summary>
-internal class SimpleDbContextFactory<TContext> : IDbContextFactory<TContext>
+internal class SimpleDbContextFactory<TContext>(DbContextOptions<TContext> options) : IDbContextFactory<TContext>
     where TContext : DbContext
 {
-    private readonly DbContextOptions<TContext> _options;
-
-    public SimpleDbContextFactory(DbContextOptions<TContext> options)
-    {
-        _options = options;
-    }
-
     public TContext CreateDbContext()
     {
-        return (TContext)Activator.CreateInstance(typeof(TContext), _options)!;
+        return (TContext)Activator.CreateInstance(typeof(TContext), options)!;
     }
 }

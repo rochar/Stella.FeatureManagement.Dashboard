@@ -49,7 +49,7 @@ internal sealed class DashboardInitializer(FeatureFlagDbContext context, ILogger
                     existing.Filters.Add(new FeatureFilter
                     {
                         FilterType = definition.Filter.FilterType,
-                        Parameters = definition.Filter.Parameters
+                        Parameters = ToJson(definition.Filter.Parameters)
                     });
                 }
 
@@ -72,7 +72,7 @@ internal sealed class DashboardInitializer(FeatureFlagDbContext context, ILogger
                     featureFlag.Filters.Add(new FeatureFilter
                     {
                         FilterType = definition.Filter.FilterType,
-                        Parameters = definition.Filter.Parameters
+                        Parameters = ToJson(definition.Filter.Parameters)
                     });
                 }
 
@@ -81,6 +81,11 @@ internal sealed class DashboardInitializer(FeatureFlagDbContext context, ILogger
                     definition.IsEnabled);
             }
         }
+    }
+
+    private static string? ToJson(object? filterParameters)
+    {
+        return filterParameters is null ? null : System.Text.Json.JsonSerializer.Serialize(filterParameters);
     }
 
     private async Task AddFeaturesIfNotExists(DashboardOptions options, CancellationToken cancellationToken)
@@ -104,7 +109,7 @@ internal sealed class DashboardInitializer(FeatureFlagDbContext context, ILogger
                     featureFlag.Filters.Add(new FeatureFilter
                     {
                         FilterType = definition.Filter.FilterType,
-                        Parameters = definition.Filter.Parameters
+                        Parameters = ToJson(definition.Filter.Parameters)
                     });
                 }
 

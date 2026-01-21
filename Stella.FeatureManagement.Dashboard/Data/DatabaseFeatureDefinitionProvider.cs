@@ -29,10 +29,7 @@ internal class DatabaseFeatureDefinitionProvider : IFeatureDefinitionProvider
             .Include(f => f.Filters)
             .ToListAsync();
 
-        foreach (var feature in features)
-        {
-            yield return CreateFeatureDefinition(feature);
-        }
+        foreach (var feature in features) yield return CreateFeatureDefinition(feature);
     }
 
     /// <inheritdoc/>
@@ -70,9 +67,16 @@ internal class DatabaseFeatureDefinitionProvider : IFeatureDefinitionProvider
         // Has filters - all must pass (AND logic is handled by FeatureManager)
         var filterConfigs = feature.Filters.Select(filter =>
         {
-            var parameters = string.IsNullOrEmpty(filter.Parameters)
-                ? new Dictionary<string, string>()
-                : JsonSerializer.Deserialize<Dictionary<string, string>>(filter.Parameters) ?? [];
+            var parameters = new Dictionary<string, string>();
+
+            if (!string.IsNullOrEmpty(filter.Parameters))
+            {
+                var jsonDoc = JsonDocument.Parse(filter.Parameters);
+                foreach (var property in jsonDoc.RootElement.EnumerateObject())
+                {
+                    parameters[property.Name] = property.Value.ToString();
+                }
+            }
 
             return new FeatureFilterConfiguration
             {
