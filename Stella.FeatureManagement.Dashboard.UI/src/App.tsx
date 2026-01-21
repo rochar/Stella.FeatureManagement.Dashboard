@@ -72,7 +72,13 @@ export default function App() {
       })
 
       if (!res.ok) {
-        throw new Error(`Failed to update feature (${res.status})`)
+        let errorMsg = `Failed to update feature (${res.status})`
+        if (res.status === 400) {
+          const text = await res.text()
+          const firstLine = text.split('\n')[0]
+          if (firstLine) errorMsg += `: ${firstLine}`
+        }
+        throw new Error(errorMsg)
       }
 
       setLastUpdated(new Date())
@@ -211,7 +217,13 @@ export default function App() {
       })
 
       if (!res.ok) {
-        throw new Error(`Failed to update filter (${res.status})`)
+        let errorMsg = `Failed to update filter (${res.status})`
+        if (res.status === 400) {
+          const text = await res.text()
+          const firstLine = text.split('\n')[0]
+          if (firstLine) errorMsg += `: ${firstLine}`
+        }
+        throw new Error(errorMsg)
       }
 
       const updated = await res.json()
@@ -352,19 +364,42 @@ export default function App() {
         )}
       </div>
 
-      <main>
-        {error && (
-          <div className="error-banner">
-            <svg className="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 8v4M12 16h.01" />
-            </svg>
-            <span>{error}</span>
-            <button className="error-retry" onClick={fetchFeatures}>Retry</button>
+      {/* Error Modal */}
+      {error && (
+        <div className="modal-overlay" onClick={() => setError(null)}>
+          <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="modal-header modal-header-error">
+              <h2>Error</h2>
+              <button className="modal-close" onClick={() => setError(null)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="error-modal-content">
+                <svg className="error-modal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 8v4M12 16h.01" />
+                </svg>
+                <p>{error}</p>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                type="button" 
+                className="modal-btn modal-btn-primary"
+                onClick={() => setError(null)}
+              >
+                OK
+              </button>
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {loading && !error && (
+      <main>
+        {loading && (
           <div className="loading-container">
             <div className="loading-spinner"></div>
             <p>Loading features...</p>

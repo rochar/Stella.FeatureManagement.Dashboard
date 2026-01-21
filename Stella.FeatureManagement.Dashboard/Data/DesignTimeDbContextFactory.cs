@@ -7,7 +7,7 @@ namespace Stella.FeatureManagement.Dashboard.Data;
 /// Design-time factory for creating <see cref="FeatureFlagDbContext"/> instances.
 /// Used by EF Core tools for migrations.
 /// </summary>
-public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<FeatureFlagDbContext>
+internal class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<FeatureFlagDbContext>
 {
     /// <inheritdoc/>
     public FeatureFlagDbContext CreateDbContext(string[] args)

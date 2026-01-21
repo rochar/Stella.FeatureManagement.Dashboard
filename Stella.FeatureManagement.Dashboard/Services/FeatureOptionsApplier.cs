@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Stella.FeatureManagement.Dashboard.Data;
 
-namespace Stella.FeatureManagement.Dashboard;
+namespace Stella.FeatureManagement.Dashboard.Services;
 
 /// <summary>
 /// Service for applying feature flag options to the database.

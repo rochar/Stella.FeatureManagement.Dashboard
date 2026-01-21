@@ -5,7 +5,7 @@ namespace Stella.FeatureManagement.Dashboard.Data;
 /// <summary>
 /// Database context for feature flags.
 /// </summary>
-public class FeatureFlagDbContext : DbContext
+internal class FeatureFlagDbContext : DbContext
 {
     /// <summary>
     /// Initializes a new instance of <see cref="FeatureFlagDbContext"/>.

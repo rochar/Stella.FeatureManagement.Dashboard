@@ -70,9 +70,6 @@ You can also query feature flags programmatically via the REST API:
 # Get all features
 GET /features
 
-# Check if a specific feature is enabled
-GET /features/BetaFeature
-
 # Response:
 # true 
 ```

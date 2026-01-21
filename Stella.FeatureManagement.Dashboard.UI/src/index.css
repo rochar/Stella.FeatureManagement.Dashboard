@@ -942,6 +942,44 @@ h1 {
   background: #dc2626;
 }
 
+/* Error Modal */
+.modal-header-error {
+  background: transparent;
+  border-bottom: none;
+  padding: 16px 20px 0;
+}
+
+.modal-header-error h2 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-danger);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.error-modal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.error-modal-icon {
+  width: 40px;
+  height: 40px;
+  color: var(--color-danger);
+  opacity: 0.8;
+}
+
+.error-modal-content p {
+  color: var(--color-text);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
 /* Footer */
 .footer {
   display: flex;

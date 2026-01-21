@@ -1,4 +1,4 @@
-namespace Stella.FeatureManagement.Dashboard;
+namespace Stella.FeatureManagement.Dashboard.Services;
 
 /// <summary>
 /// Service for to update database schema and initialize feature flag .
