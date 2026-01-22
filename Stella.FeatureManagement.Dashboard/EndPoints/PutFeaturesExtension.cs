@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Stella.FeatureManagement.Dashboard.Data;
 using Stella.FeatureManagement.Dashboard.Services;
 
@@ -15,8 +16,11 @@ internal static class PutFeaturesExtension
                 string featureName,
                 UpdateFeatureRequest request,
                 IFeatureChangeValidation featureChangeValidation,
-                IDbContextFactory<FeatureFlagDbContext> contextFactory) =>
+                IDbContextFactory<FeatureFlagDbContext> contextFactory,
+                ILogger<FeatureFlagDbContext> logger) =>
             {
+                logger.LogDebug("Received update request for feature {FeatureName}", featureName);
+
                 await using var context = await contextFactory.CreateDbContextAsync();
 
                 var feature = await context.FeatureFlags
@@ -24,13 +28,22 @@ internal static class PutFeaturesExtension
                     .FirstOrDefaultAsync(f => f.Name == featureName);
 
                 if (feature is null)
+                {
+                    logger.LogWarning("Feature {FeatureName} not found", featureName);
                     return Results.NotFound(new { message = $"Feature '{featureName}' not found." });
+                }
 
                 var canProceed = featureChangeValidation.CanProceed(request.ToDto(featureName), FeatureChangeType.Update);
 
-                return canProceed.Cancel
-                    ? Results.BadRequest(canProceed.CancellationMessage)
-                    : Results.Ok(await UpdateFeature(feature, request, context));
+                if (canProceed.Cancel)
+                {
+                    logger.LogWarning("Update operation cancelled for feature {FeatureName}: {CancellationMessage}", featureName, canProceed.CancellationMessage);
+                    return Results.BadRequest(canProceed.CancellationMessage);
+                }
+
+                var result = await UpdateFeature(feature, request, context);
+                logger.LogInformation("Feature {FeatureName} updated successfully with IsEnabled={IsEnabled}", featureName, request.IsEnabled);
+                return Results.Ok(result);
             })
             .Produces<FeatureFlagDto>(200)
             .Produces(404)
