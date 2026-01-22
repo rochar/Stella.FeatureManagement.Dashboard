@@ -6,6 +6,12 @@ using Stella.FeatureManagement.Dashboard;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Host.UseDefaultServiceProvider(options =>
+{
+    options.ValidateScopes = true;
+    options.ValidateOnBuild = true;
+});
+
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -33,9 +39,6 @@ builder.Services
         if (featureFlag.Name == "MyFlag") // MyFlag is readonly
             return new FeatureChangeValidationResult(true, "MyFlag can not be updated!");
 
-        if (featureFlag.Name == "FilteredFlag") //Validate a filter
-            return ValidateFilteredFlag(featureFlag);
-
         return new FeatureChangeValidationResult(false, string.Empty);
     });
 
@@ -51,55 +54,20 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-app.MapFeaturesDashboardEndpoints(configureCors: policy => policy
+var featureDashboard = app.UseFeaturesDashboard(configureCors: policy => policy
     .AllowAnyOrigin()
     .AllowAnyMethod()
     .AllowAnyHeader());
-await app.MigrateFeaturesDatabaseAsync();
-await app.InitializeFeaturesDashboardAsync((o) =>
-{
-    o.AddIfNotExists = new Dictionary<string, FeatureConfig>
-    {
-        { "MyFlag", new FeatureConfig(true, "My feature flag description") },
-        { "AnotherFlag", new FeatureConfig(false) },
-        {
-            "FilteredFlag",
-            new FeatureConfig(true, Filter: new FeatureFilterConfig("Microsoft.Percentage",
-                new PercentageFilterSettings { Value = 50 }))
-        }
-    };
-});
 
+await featureDashboard.MigrateFeaturesDatabaseAsync();
+await featureDashboard.RegisterManagedFeaturesAsync([
+    new ManagedFeature("MyFlag", "My feature flag description", true),
+    new ManagedFeature("AnotherFlag", string.Empty, false),
+    new ManagedFeature("FilteredFlag", string.Empty, true,
+        new FilterOptions("Microsoft.Percentage", new PercentageFilterSettings { Value = 50 }))
+]);
 app.Run();
 
-FeatureChangeValidationResult ValidateFilteredFlag(FeatureFlagDto featureFlagDto)
-{
-    var percentageFilter = featureFlagDto.Filters?.FirstOrDefault(f => f.FilterType == "Microsoft.Percentage");
-    if (percentageFilter is null)
-        return new FeatureChangeValidationResult(true, "FilteredFlag must have a Microsoft.Percentage filter.");
-
-    try
-    {
-        var options = new System.Text.Json.JsonSerializerOptions
-        {
-            UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow
-        };
-        var settings =
-            System.Text.Json.JsonSerializer.Deserialize<PercentageFilterSettings>(percentageFilter.Parameters ??
-                "{}", options);
-        if (settings is null)
-            return new FeatureChangeValidationResult(true,
-                "FilteredFlag filter parameters are not valid JSON for PercentageFilterSettings.");
-    }
-    catch (System.Text.Json.JsonException)
-    {
-        return new FeatureChangeValidationResult(true,
-            "FilteredFlag filter parameters are not valid JSON for PercentageFilterSettings.");
-    }
-
-    return new FeatureChangeValidationResult(false, string.Empty);
-    ;
-}
 
 public partial class Program
 {

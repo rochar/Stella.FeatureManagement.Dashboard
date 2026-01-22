@@ -4,8 +4,9 @@ var builder = DistributedApplication.CreateBuilder(args);
 var postgresPassword = builder.AddParameter("postgres-password", secret: true);
 
 var postgres = builder.AddPostgres("postgres", password: postgresPassword)
+.WithLifetime(ContainerLifetime.Persistent)
 .WithHostPort(5432)
-//.WithDataVolume()
+.WithDataVolume()
 .WithPgAdmin()
 .AddDatabase("features");
 

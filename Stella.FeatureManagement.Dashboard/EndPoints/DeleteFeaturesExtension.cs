@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Stella.FeatureManagement.Dashboard.Data;
 using Stella.FeatureManagement.Dashboard.Services;
 
@@ -14,7 +15,8 @@ internal static class DeleteFeaturesExtension
         routeGroup.MapDelete("{featureName}", async (
                 string featureName,
                 IFeatureChangeValidation featureChangeValidation,
-                IDbContextFactory<FeatureFlagDbContext> contextFactory) =>
+                IDbContextFactory<FeatureFlagDbContext> contextFactory,
+                ILogger<FeatureFlagDbContext> logger) =>
             {
                 await using var context = await contextFactory.CreateDbContextAsync();
                 var feature = await context.FeatureFlags
@@ -29,7 +31,11 @@ internal static class DeleteFeaturesExtension
                         FeatureChangeType.Delete);
 
                 if (canProceed.Cancel)
+                {
+                    logger.LogWarning("Delete operation cancelled for feature {FeatureName}: {CancellationMessage}", featureName, canProceed.CancellationMessage);
                     return Results.BadRequest(canProceed.CancellationMessage);
+                }
+                    
 
                 await DeleteFeature(context, feature);
 

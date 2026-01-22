@@ -1,10 +1,5 @@
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Stella.FeatureManagement.Dashboard.EndPoints;
-using Stella.FeatureManagement.Dashboard.Services;
 
 namespace Stella.FeatureManagement.Dashboard;
 
@@ -14,61 +9,7 @@ namespace Stella.FeatureManagement.Dashboard;
 public static class EndpointRouteBuilderExtensions
 {
     /// <summary>
-    /// Applies pending database migrations for the Feature Management Dashboard.
-    /// Creates the database if it does not exist.
-    /// </summary>
-    /// <param name="routeBuilder">The <see cref="IEndpointRouteBuilder"/> to access services.</param>
-    /// <param name="cancellationToken">A token to cancel the operation.</param>
-    /// <returns>A task that represents the asynchronous migration operation.</returns>
-    public static async Task MigrateFeaturesDatabaseAsync(this IEndpointRouteBuilder routeBuilder,
-        CancellationToken cancellationToken = default)
-    {
-        await using var scope = routeBuilder.ServiceProvider.CreateAsyncScope();
-        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
-            .CreateLogger(typeof(EndpointRouteBuilderExtensions));
-
-        var initializer = scope.ServiceProvider.GetService<IDashboardInitializer>();
-
-        if (initializer is null)
-        {
-            logger.LogError("Cannot apply migrations: IDashboardInitializer is not registered.");
-            return;
-        }
-
-        await initializer.RunMigrationsAsync(cancellationToken);
-    }
-
-    /// <summary>
-    /// Ensure Feature Management Dashboard is initialized with the specified options.
-    /// </summary>
-    /// <param name="routeBuilder">The <see cref="IEndpointRouteBuilder"/> to access services.</param>
-    /// <param name="configure">Action to configure dashboard options for seeding features.</param>
-    /// <param name="cancellationToken">A token to cancel the operation.</param>
-    /// <returns>A task that represents the asynchronous seed operation.</returns>
-    public static async Task InitializeFeaturesDashboardAsync(this IEndpointRouteBuilder routeBuilder,
-        Action<DashboardOptions> configure,
-        CancellationToken cancellationToken = default)
-    {
-        await using var scope = routeBuilder.ServiceProvider.CreateAsyncScope();
-        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
-            .CreateLogger(typeof(EndpointRouteBuilderExtensions));
-
-        var options = new DashboardOptions();
-        configure(options);
-
-        var initializer = scope.ServiceProvider.GetService<IDashboardInitializer>();
-
-        if (initializer is null)
-        {
-            logger.LogError("Cannot seed features: IDashboardInitializer is not registered.");
-            return;
-        }
-
-        await initializer.ApplyDashboardOptionsAsync(options, cancellationToken);
-    }
-
-    /// <summary>
-    /// Maps the Feature Management Dashboard endpoints to the specified route group.
+    /// Add Feature Management Dashboard endpoints to the specified route group.
     /// Creates two route groups:
     /// <list type="bullet">
     ///   <item><description><c>{group}/dashboard</c> - Serves the static dashboard UI.</description></item>
@@ -80,32 +21,12 @@ public static class EndpointRouteBuilderExtensions
     /// <param name="group">The route prefix for the dashboard endpoints. Defaults to "/features".</param>
     /// <param name="configureCors">Optional action to configure CORS policy for the dashboard endpoints.</param>
     /// <returns>The <see cref="IEndpointRouteBuilder"/> so that additional calls can be chained.</returns>
-    public static IEndpointRouteBuilder MapFeaturesDashboardEndpoints(this IEndpointRouteBuilder routeBuilder,
+    public static IFeatureDashboardBuilder UseFeaturesDashboard(this IEndpointRouteBuilder routeBuilder,
         string group = "/features",
         Action<CorsPolicyBuilder>? configureCors = null)
     {
-        var featuresGroup = routeBuilder.MapGroup($"{group}");
-        var dashboardGroup = routeBuilder.MapGroup($"{group}/dashboard");
-        var dashboardApi = routeBuilder.MapGroup($"{group}/dashboardapi/features");
-
-        if (configureCors is not null)
-        {
-            dashboardGroup.RequireCors(configureCors);
-            dashboardApi.RequireCors(configureCors);
-            featuresGroup.RequireCors(configureCors);
-        }
-
-        dashboardGroup
-            .MapStaticDashboard();
-        dashboardApi
-            .MapGetFeatures()
-            .MapPostFeatures()
-            .MapPutFeatures()
-            .MapDeleteFeatures();
-
-        featuresGroup
-            .MapGetFeaturesFromFeatureManager();
-
-        return routeBuilder;
+        var builder = new FeatureDashboardBuilder(routeBuilder);
+        builder.UseFeaturesDashboard(group, configureCors);
+        return builder;
     }
 }

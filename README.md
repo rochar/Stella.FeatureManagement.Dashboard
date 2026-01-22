@@ -43,13 +43,13 @@ var app = builder.Build();
 // Map the dashboard endpoints
 app.MapFeaturesDashboardEndpoints();
 // Update features database model
-await app.MigrateFeaturesDatabaseAsync();
-//Ensure default features are initialized
-await app.InitializeFeaturesDashboardAsync(configure: (o) =>
-{
-     { "MyFlag", new FeatureConfig(true, "My feature flag description") },
-        { "AnotherFlag", new FeatureConfig(false) }
-});
+await featureDashboard.MigrateFeaturesDatabaseAsync();
+
+// Ensure default features are initialized
+await featureDashboard.RegisterManagedFeaturesAsync([
+    new ManagedFeature("MyFlag", "My feature flag description", true),
+    new ManagedFeature("AnotherFlag", string.Empty, false)
+]);
     
 app.Run();
 ```

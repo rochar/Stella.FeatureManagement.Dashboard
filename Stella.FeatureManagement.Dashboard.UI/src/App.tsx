@@ -55,20 +55,37 @@ export default function App() {
     const newState = !currentState
     setUpdating(featureName)
     
+    const feature = features.find(f => f.name === featureName)
+    if (!feature) return
+    
     // Optimistic update
     setFeatures(prev =>
-      prev.map(feature =>
-        feature.name === featureName
-          ? { ...feature, isEnabled: newState }
-          : feature
+      prev.map(f =>
+        f.name === featureName
+          ? { ...f, isEnabled: newState }
+          : f
       )
     )
 
     try {
+      // Build request body with full feature properties
+      const body: { isEnabled: boolean; description: string | null; filter?: { filterType: string; parameters: string | null } } = {
+        isEnabled: newState,
+        description: feature.description
+      }
+      
+      // Include filter if present
+      if (feature.filters.length > 0) {
+        body.filter = {
+          filterType: feature.filters[0].filterType,
+          parameters: feature.filters[0].parameters
+        }
+      }
+      
       const res = await fetch(`${API_BASE}/${featureName}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isEnabled: newState })
+        body: JSON.stringify(body)
       })
 
       if (!res.ok) {
@@ -85,17 +102,17 @@ export default function App() {
     } catch (err) {
       // Revert on error
       setFeatures(prev =>
-        prev.map(feature =>
-          feature.name === featureName
-            ? { ...feature, isEnabled: currentState }
-            : feature
+        prev.map(f =>
+          f.name === featureName
+            ? { ...f, isEnabled: currentState }
+            : f
         )
       )
       setError(err instanceof Error ? err.message : 'Failed to update feature')
     } finally {
       setUpdating(null)
     }
-  }, [])
+  }, [features])
 
   const createFeature = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()

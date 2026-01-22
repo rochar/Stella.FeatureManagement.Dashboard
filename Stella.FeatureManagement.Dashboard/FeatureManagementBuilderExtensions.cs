@@ -22,7 +22,8 @@ public static class FeatureManagementBuilderExtensions
     {
         builder.Services.AddDbContextFactory<FeatureFlagDbContext>(configureDbContext);
         builder.Services.AddSingleton<IFeatureDefinitionProvider, DatabaseFeatureDefinitionProvider>();
-        builder.Services.AddScoped<IDashboardInitializer, DashboardInitializer>();
+        builder.Services.AddSingleton<IDashboardInitializer, DashboardInitializer>();
+        builder.Services.AddSingleton<IManagedFeatureRegistration, ManagedFeatureRegistration>();
         builder.Services.AddSingleton(typeof(IFeatureChangeValidation), new NoValidationFeatureChangeValidation());
 
         return builder;
@@ -46,7 +47,7 @@ public static class FeatureManagementBuilderExtensions
     ///     .AddFeaturesDashboard(options => options.UseNpgsql(connectionString))
     ///     .OnFeatureChanging((feature, changeType) =>
     ///     {
-    ///         if (feature.Name == "PROD_X")
+    ///         if (feature.TypeName == "PROD_X")
     ///             return new FeatureChangeValidationResult(Cancel: true, "PROD_X feature is read-only.");
     ///         return new FeatureChangeValidationResult(Cancel: false, null);
     ///     });
@@ -61,8 +62,10 @@ public static class FeatureManagementBuilderExtensions
 
         foreach (var descriptor in descriptors) builder.Services.Remove(descriptor);
 
-        builder.Services.AddSingleton(typeof(IFeatureChangeValidation),
-            new FeatureChangeValidation(featureChangeValidator));
+        builder.Services.AddSingleton<IFeatureChangeValidation>(sp =>
+            new FeatureChangeValidation(
+                featureChangeValidator,
+                sp.GetRequiredService<IManagedFeatureRegistration>()));
         return builder;
     }
 }

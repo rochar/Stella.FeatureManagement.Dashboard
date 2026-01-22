@@ -1,8 +1,11 @@
+using Microsoft.EntityFrameworkCore;
+
 namespace Stella.FeatureManagement.Dashboard.Data;
 
 /// <summary>
 /// Represents a feature flag stored in the database.
 /// </summary>
+[Index(nameof(Name), IsUnique = true)]
 public class FeatureFlag
 {
     /// <summary>

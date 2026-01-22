@@ -7,41 +7,51 @@ namespace Stella.FeatureManagement.Dashboard.Tests;
 public class PutEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
 {
     private readonly HttpClient _client = webApp.CreateClient();
+
     [Theory]
     [InlineData("AnotherFlag")]
     public async Task WhenPutFeatureUpdatesState(string featureName)
     {
         // Arrange - Get current state first
-        var getInitialResponse = await _client.GetAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", TestContext.Current.CancellationToken);
-        var initialResult = await getInitialResponse.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        var getInitialResponse = await _client.GetAsync($"{WebApp.ApiBaseUrl}/features/{featureName}",
+            TestContext.Current.CancellationToken);
+        var initialResult =
+            await getInitialResponse.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current
+                .CancellationToken);
         var initialState = initialResult!.IsEnabled;
         var newState = !initialState;
 
         var request = new { IsEnabled = newState };
 
         // Act
-        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", request, TestContext.Current.CancellationToken);
+        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", request,
+            TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var result = await response.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        var result =
+            await response.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
         result.ShouldNotBeNull();
         result.Name.ShouldBe(featureName);
         result.IsEnabled.ShouldBe(newState);
 
         // Verify the change persisted
-        var getResponse = await _client.GetAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", TestContext.Current.CancellationToken);
-        var verifyResult = await getResponse.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        var getResponse = await _client.GetAsync($"{WebApp.ApiBaseUrl}/features/{featureName}",
+            TestContext.Current.CancellationToken);
+        var verifyResult =
+            await getResponse.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
         verifyResult.ShouldNotBeNull();
         verifyResult.IsEnabled.ShouldBe(newState);
     }
+
     [Fact]
     public async Task WhenPutFeatureUpdatesStateWithFilter()
     {
         // Arrange - Create a feature without a filter
         var featureName = $"FeatureToUpdate_{Guid.NewGuid():N}";
         var createRequest = new { Name = featureName, IsEnabled = false };
-        var createResponse = await _client.PostAsJsonAsync($"{WebApp.ApiBaseUrl}/features", createRequest, TestContext.Current.CancellationToken);
+        var createResponse = await _client.PostAsJsonAsync($"{WebApp.ApiBaseUrl}/features", createRequest,
+            TestContext.Current.CancellationToken);
         createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         // Update with a filter
@@ -53,11 +63,13 @@ public class PutEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
         };
 
         // Act
-        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", updateRequest, TestContext.Current.CancellationToken);
+        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", updateRequest,
+            TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var result = await response.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        var result =
+            await response.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
         result.ShouldNotBeNull();
         result.Name.ShouldBe(featureName);
         result.IsEnabled.ShouldBeTrue();
@@ -67,6 +79,25 @@ public class PutEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
         result.Filters[0].FilterType.ShouldBe("Microsoft.Percentage");
         result.Filters[0].Parameters.ShouldBe("{\"Value\": 50}");
     }
+
+    [Fact]
+    public async Task WhenPutFeatureUpdatesStateWithInvalidFilterReturn400()
+    {
+        // Arrange 
+        var updateRequest = new
+        {
+            IsEnabled = true,
+            Filter = new { FilterType = "Microsoft.Percentage", Parameters = "{\"Dummy\": 50}" }
+        };
+
+        // Act
+        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/FilteredFlag", updateRequest,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
     [Fact]
     public async Task WhenPutFeatureNotFoundReturns404()
     {
@@ -74,7 +105,8 @@ public class PutEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
         var request = new { IsEnabled = true };
 
         // Act
-        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/NonExistentFeature", request, TestContext.Current.CancellationToken);
+        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/NonExistentFeature", request,
+            TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -86,11 +118,12 @@ public class PutEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
         // Arrange
         var updateRequest = new
         {
-            IsEnabled = true,
+            IsEnabled = true
         };
 
         // Act
-        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/MyFlag", updateRequest, TestContext.Current.CancellationToken);
+        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/MyFlag", updateRequest,
+            TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
