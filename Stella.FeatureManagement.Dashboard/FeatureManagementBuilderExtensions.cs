@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.FeatureManagement;
 using Stella.FeatureManagement.Dashboard.Data;
 using Stella.FeatureManagement.Dashboard.Services;
@@ -65,7 +66,8 @@ public static class FeatureManagementBuilderExtensions
         builder.Services.AddSingleton<IFeatureChangeValidation>(sp =>
             new FeatureChangeValidation(
                 featureChangeValidator,
-                sp.GetRequiredService<IManagedFeatureRegistration>()));
+                sp.GetRequiredService<IManagedFeatureRegistration>(),
+                sp.GetRequiredService<ILogger<FeatureChangeValidation>>()));
         return builder;
     }
 }

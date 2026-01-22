@@ -1,3 +1,4 @@
+using Example.Api.FeatureManager;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.FeatureManagement;
 using Microsoft.FeatureManagement.FeatureFilters;
@@ -61,6 +62,7 @@ var featureDashboard = app.UseFeaturesDashboard(configureCors: policy => policy
 
 await featureDashboard.MigrateFeaturesDatabaseAsync();
 await featureDashboard.RegisterManagedFeaturesAsync([
+    new ManagedFeature("CustomFilterFlag", string.Empty, true, new FilterOptions("TestFilter",new TestFilterSettings(){Ids = [3,4]})),
     new ManagedFeature("MyFlag", "My feature flag description", true),
     new ManagedFeature("AnotherFlag", string.Empty, false),
     new ManagedFeature("FilteredFlag", string.Empty, true,
