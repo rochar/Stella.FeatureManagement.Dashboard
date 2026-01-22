@@ -36,6 +36,14 @@ internal class FeatureDashboardBuilder(IEndpointRouteBuilder routeBuilder) : IFe
             .MapGetFeaturesFromFeatureManager();
     }
 
+    public IFeatureDashboardBuilder OnFeatureChanging(Func<FeatureFlagDto, FeatureChangeType, FeatureChangeValidationResult> featureChangeValidator)
+    {
+        using var scope = routeBuilder.ServiceProvider.CreateScope();
+        var featureValidation = scope.ServiceProvider.GetRequiredService<IFeatureChangeValidation>();
+        featureValidation.RegisterCustomValidation(featureChangeValidator);
+        return this;
+    }
+
     /// <summary>
     /// Applies pending database migrations for the Feature Management Dashboard.
     /// Creates the database if it does not exist.

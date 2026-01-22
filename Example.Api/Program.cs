@@ -34,14 +34,8 @@ builder.AddServiceDefaults();
 // Add Feature Management with Dashboard 
 builder.Services
     .AddFeatureManagement()
-    .AddFeaturesDashboard(options => options.UseNpgsql(builder.Configuration.GetConnectionString("features")))
-    .OnFeatureChanging((featureFlag, _) =>
-    {
-        if (featureFlag.Name == "MyFlag") // MyFlag is readonly
-            return new FeatureChangeValidationResult(true, "MyFlag can not be updated!");
+    .AddFeaturesDashboard(options => options.UseNpgsql(builder.Configuration.GetConnectionString("features")));
 
-        return new FeatureChangeValidationResult(false, string.Empty);
-    });
 
 var app = builder.Build();
 
@@ -56,13 +50,22 @@ if (app.Environment.IsDevelopment())
 }
 
 var featureDashboard = app.UseFeaturesDashboard(configureCors: policy => policy
-    .AllowAnyOrigin()
-    .AllowAnyMethod()
-    .AllowAnyHeader());
+        .AllowAnyOrigin()
+        .AllowAnyMethod()
+        .AllowAnyHeader())
+    .OnFeatureChanging((featureFlag, _) =>
+    {
+        if (featureFlag.Name == "MyFlag") // MyFlag is readonly
+            return new FeatureChangeValidationResult(true, "MyFlag can not be updated!");
+
+        return new FeatureChangeValidationResult(false, string.Empty);
+    });
+;
 
 await featureDashboard.MigrateFeaturesDatabaseAsync();
 await featureDashboard.RegisterManagedFeaturesAsync([
-    new ManagedFeature("CustomFilterFlag", string.Empty, true, new FilterOptions("TestFilter",new TestFilterSettings(){Ids = [3,4]})),
+    new ManagedFeature("CustomFilterFlag", string.Empty, true,
+        new FilterOptions("TestFilter", new TestFilterSettings { Ids = [3, 4] })),
     new ManagedFeature("MyFlag", "My feature flag description", true),
     new ManagedFeature("AnotherFlag", string.Empty, false),
     new ManagedFeature("FilteredFlag", string.Empty, true,

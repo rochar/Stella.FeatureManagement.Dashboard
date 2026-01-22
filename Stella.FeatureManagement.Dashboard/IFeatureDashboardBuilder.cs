@@ -31,6 +31,29 @@ public interface IFeatureDashboardBuilder
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Subscribes to feature flag change events for pre-save validation.
+    /// The validator is invoked before any feature flag is created, updated, or deleted,
+    /// allowing the subscriber to cancel the operation with a message.
+    /// </summary>
+    /// <param name="featureChangeValidator">
+    /// A delegate that receives the feature data, change type, and cancellation token.
+    /// Return <see cref="FeatureChangeValidationResult"/> with <c>Cancel = true</c> to reject the change.
+    /// </param>
+    /// <example>
+    /// <code>
+    /// app.UseFeaturesDashboard()
+    ///     .OnFeatureChanging((feature, changeType) =>
+    ///     {
+    ///         if (feature.TypeName == "PROD_X")
+    ///             return new FeatureChangeValidationResult(Cancel: true, "PROD_X feature is read-only.");
+    ///         return new FeatureChangeValidationResult(Cancel: false, null);
+    ///     });
+    /// </code>
+    /// </example>
+    IFeatureDashboardBuilder OnFeatureChanging(
+        Func<FeatureFlagDto, FeatureChangeType, FeatureChangeValidationResult> featureChangeValidator);
+
+    /// <summary>
     /// Registers multiple managed feature flags in the dashboard.
     /// Iterates through the provided features and registers each one.
     /// </summary>

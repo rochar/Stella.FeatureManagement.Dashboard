@@ -19,7 +19,7 @@ internal static class PutFeaturesExtension
                 IDbContextFactory<FeatureFlagDbContext> contextFactory,
                 ILogger<FeatureFlagDbContext> logger) =>
             {
-                logger.LogDebug("Received update request for feature {FeatureName}", featureName);
+                logger.LogInformation("Received update request for feature {FeatureName}", featureName);
 
                 await using var context = await contextFactory.CreateDbContextAsync();
 
