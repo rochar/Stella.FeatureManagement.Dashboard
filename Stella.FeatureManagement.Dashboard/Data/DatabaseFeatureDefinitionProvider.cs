@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.FeatureManagement;
-using System.Text.Json;
+using System.Text;
 
 namespace Stella.FeatureManagement.Dashboard.Data;
 
@@ -67,22 +67,15 @@ internal class DatabaseFeatureDefinitionProvider : IFeatureDefinitionProvider
         // Has filters - all must pass (AND logic is handled by FeatureManager)
         var filterConfigs = feature.Filters.Select(filter =>
         {
-            var parameters = new Dictionary<string, string>();
-
+            var configurationBuilder = new ConfigurationBuilder();
             if (!string.IsNullOrEmpty(filter.Parameters))
-            {
-                var jsonDoc = JsonDocument.Parse(filter.Parameters);
-                foreach (var property in jsonDoc.RootElement.EnumerateObject())
-                {
-                    parameters[property.Name] = property.Value.ToString();
-                }
-            }
+                configurationBuilder
+                    .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(filter.Parameters)));
 
             return new FeatureFilterConfiguration
             {
                 Name = filter.FilterType,
-                Parameters = new ConfigurationBuilder()
-                    .AddInMemoryCollection(parameters!)
+                Parameters = configurationBuilder
                     .Build()
             };
         }).ToList();

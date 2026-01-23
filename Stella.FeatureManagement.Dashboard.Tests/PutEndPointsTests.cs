@@ -1,4 +1,5 @@
-﻿using Shouldly;
+﻿using Example.Api.FeatureManager;
+using Shouldly;
 using System.Net;
 using System.Net.Http.Json;
 
@@ -128,4 +129,30 @@ public class PutEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(2, true)]
+    public async Task WhenUpdateFilterShouldReturnEnabled(int id, bool expectedResult)
+    {
+        // Arrange
+        // Arrange 
+        var updateRequest = new
+        {
+            IsEnabled = true,
+            Filter = new { FilterType = "TestFilter", Parameters = System.Text.Json.JsonSerializer.Serialize(new TestFilterSettings { Ids = [id] }) }
+        };
+
+        var updateResponse = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/CustomFilterFlag", updateRequest,
+             TestContext.Current.CancellationToken);
+        updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Act - Get from FeatureManager the current state
+        var response = await _client.GetAsync($"features/CustomFilterFlag", TestContext.Current.CancellationToken);
+        var content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var result = bool.Parse(content);
+
+        // Assert
+        result.ShouldBe(expectedResult);
+    }
+
 }

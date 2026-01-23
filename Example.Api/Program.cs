@@ -12,7 +12,7 @@ builder.Host.UseDefaultServiceProvider(options =>
     options.ValidateScopes = true;
     options.ValidateOnBuild = true;
 });
-
+builder.Services.AddHttpContextAccessor();
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -34,6 +34,7 @@ builder.AddServiceDefaults();
 // Add Feature Management with Dashboard 
 builder.Services
     .AddFeatureManagement()
+    .AddFeatureFilter<TestFilter>()
     .AddFeaturesDashboard(options => options.UseNpgsql(builder.Configuration.GetConnectionString("features")));
 
 
