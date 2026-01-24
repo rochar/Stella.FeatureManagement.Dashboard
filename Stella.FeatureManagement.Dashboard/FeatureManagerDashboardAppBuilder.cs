@@ -8,7 +8,7 @@ using Stella.FeatureManagement.Dashboard.Services;
 
 namespace Stella.FeatureManagement.Dashboard;
 
-internal class FeatureDashboardBuilder(IEndpointRouteBuilder routeBuilder) : IFeatureDashboardBuilder
+internal class FeatureManagerDashboardAppBuilder(IEndpointRouteBuilder routeBuilder) : IFeatureManagerDashboardAppBuilder
 {
     public void UseFeaturesDashboard(string group = "/features",
         Action<CorsPolicyBuilder>? configureCors = null)
@@ -36,7 +36,7 @@ internal class FeatureDashboardBuilder(IEndpointRouteBuilder routeBuilder) : IFe
             .MapGetFeaturesFromFeatureManager();
     }
 
-    public IFeatureDashboardBuilder OnFeatureChanging(Func<FeatureFlagDto, FeatureChangeType, FeatureChangeValidationResult> featureChangeValidator)
+    public IFeatureManagerDashboardAppBuilder OnFeatureChanging(Func<FeatureFlagDto, FeatureChangeType, FeatureChangeValidationResult> featureChangeValidator)
     {
         using var scope = routeBuilder.ServiceProvider.CreateScope();
         var featureValidation = scope.ServiceProvider.GetRequiredService<IFeatureChangeValidation>();
@@ -55,7 +55,7 @@ internal class FeatureDashboardBuilder(IEndpointRouteBuilder routeBuilder) : IFe
     {
         await using var scope = routeBuilder.ServiceProvider.CreateAsyncScope();
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
-            .CreateLogger(typeof(FeatureDashboardBuilder));
+            .CreateLogger(typeof(FeatureManagerDashboardAppBuilder));
 
         var initializer = scope.ServiceProvider.GetService<IDashboardInitializer>();
 
@@ -74,7 +74,7 @@ internal class FeatureDashboardBuilder(IEndpointRouteBuilder routeBuilder) : IFe
     {
         await using var scope = routeBuilder.ServiceProvider.CreateAsyncScope();
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
-            .CreateLogger(typeof(FeatureDashboardBuilder));
+            .CreateLogger(typeof(FeatureManagerDashboardAppBuilder));
 
         var initializer = scope.ServiceProvider.GetRequiredService<IDashboardInitializer>();
         await initializer.RegisterFeatureAsync(name, description, isEnabled, filterOptions, cancellationToken);

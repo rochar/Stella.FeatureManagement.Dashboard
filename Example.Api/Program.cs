@@ -1,6 +1,5 @@
 using Example.Api.FeatureManager;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.FeatureManagement;
 using Microsoft.FeatureManagement.FeatureFilters;
 using Scalar.AspNetCore;
 using Stella.FeatureManagement.Dashboard;
@@ -33,9 +32,8 @@ builder.AddServiceDefaults();
 
 // Add Feature Management with Dashboard 
 builder.Services
-    .AddFeatureManagement()
-    .AddFeatureFilter<TestFilter>()
-    .AddFeaturesDashboard(options => options.UseNpgsql(builder.Configuration.GetConnectionString("features")));
+    .AddFeaturesDashboard(options => options.UseNpgsql(builder.Configuration.GetConnectionString("features")))
+    .AddFeatureFilter<TestFilter>();
 
 
 var app = builder.Build();

@@ -3,7 +3,7 @@ namespace Stella.FeatureManagement.Dashboard;
 /// <summary>
 /// Provides methods for building and managing the feature dashboard.
 /// </summary>
-public interface IFeatureDashboardBuilder
+public interface IFeatureManagerDashboardAppBuilder
 {
     /// <summary>
     /// Applies any pending migrations to the features database.
@@ -50,7 +50,7 @@ public interface IFeatureDashboardBuilder
     ///     });
     /// </code>
     /// </example>
-    IFeatureDashboardBuilder OnFeatureChanging(
+    IFeatureManagerDashboardAppBuilder OnFeatureChanging(
         Func<FeatureFlagDto, FeatureChangeType, FeatureChangeValidationResult> featureChangeValidator);
 
     /// <summary>

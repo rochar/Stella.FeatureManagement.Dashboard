@@ -4,15 +4,12 @@ import path from 'path'
 import fs from 'fs'
 
 function getAppVersion(): string {
-  try {
     const versionFile = path.resolve(__dirname, 'version.json')
     if (fs.existsSync(versionFile)) {
       const content = JSON.parse(fs.readFileSync(versionFile, 'utf-8'))
-      return content.version || 'dev'
+      const version = content.version || '0.0.0'
+      return version
     }
-  } catch {
-    // Ignore errors
-  }
   return 'dev'
 }
 
