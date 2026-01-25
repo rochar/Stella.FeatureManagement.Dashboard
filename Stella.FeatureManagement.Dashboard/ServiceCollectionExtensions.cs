@@ -32,5 +32,5 @@ public interface IFeatureManagerDashboardBuilder
     /// </summary>
     /// <typeparam name="T">The type of the feature filter to add.</typeparam>
     /// <returns>The <see cref="IFeatureManagerDashboardBuilder" /> so that additional calls can be chained.</returns>
-    IFeatureManagerDashboardBuilder AddFeatureFilter<T>() where T : IFeatureFilterMetadata;
+    IFeatureManagerDashboardBuilder AddFeatureFilter<T>(object defaultSettings) where T : IFeatureFilterMetadata;
 }

@@ -15,18 +15,22 @@ internal class FeatureManagerDashboardAppBuilder(IEndpointRouteBuilder routeBuil
     {
         var featuresGroup = routeBuilder.MapGroup($"{group}");
         var dashboardGroup = routeBuilder.MapGroup($"{group}/dashboard");
-        var dashboardApi = routeBuilder.MapGroup($"{group}/dashboardapi/features");
+        var dashboardApiFilters = routeBuilder.MapGroup($"{group}/dashboardapi/filters");
+        var dashboardApiFeatures = routeBuilder.MapGroup($"{group}/dashboardapi/features");
 
         if (configureCors is not null)
         {
             dashboardGroup.RequireCors(configureCors);
-            dashboardApi.RequireCors(configureCors);
+            dashboardApiFilters.RequireCors(configureCors);
+            dashboardApiFeatures.RequireCors(configureCors);
             featuresGroup.RequireCors(configureCors);
         }
 
         dashboardGroup
             .MapStaticDashboard();
-        dashboardApi
+        dashboardApiFilters
+            .MapGetFilters();
+        dashboardApiFeatures
             .MapGetFeatures()
             .MapPostFeatures()
             .MapPutFeatures()

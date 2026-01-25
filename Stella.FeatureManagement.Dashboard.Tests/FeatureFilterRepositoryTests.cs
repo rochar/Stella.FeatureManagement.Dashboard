@@ -15,14 +15,14 @@ public class FeatureFilterRepositoryTests
         
         // Act
         var builder = services.AddFeaturesDashboard(options => { });
-        builder.AddFeatureFilter<TestFilter>();
+        builder.AddFeatureFilter<TestFilter>(new { });
 
         // Assert
         var serviceProvider = services.BuildServiceProvider();
         var repository = serviceProvider.GetRequiredService<IFeatureFilterRepository>();
         
         var filters = repository.GetFilters();
-        filters.ShouldContain(typeof(TestFilter));
+        filters.ShouldContain(f => f.Type == typeof(TestFilter));
     }
 
     private class TestFilter : IFeatureFilterMetadata

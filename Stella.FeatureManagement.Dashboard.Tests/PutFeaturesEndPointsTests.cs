@@ -5,7 +5,7 @@ using System.Net.Http.Json;
 
 namespace Stella.FeatureManagement.Dashboard.Tests;
 
-public class PutEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
+public class PutFeaturesEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
 {
     private readonly HttpClient _client = webApp.CreateClient();
 

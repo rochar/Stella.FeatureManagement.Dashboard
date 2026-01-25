@@ -41,7 +41,7 @@ builder.Services.AddFeatureManagement()
 var app = builder.Build();
 
 // Map the dashboard endpoints
-app.UseFeaturesDashboard();
+var featureDashboard = app.UseFeaturesDashboard();
 // Update features database model
 await featureDashboard.MigrateFeaturesDatabaseAsync();
 
