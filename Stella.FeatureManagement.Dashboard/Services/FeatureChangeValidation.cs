@@ -1,9 +1,10 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.FeatureManagement;
 
 namespace Stella.FeatureManagement.Dashboard.Services;
 
 internal sealed class FeatureChangeValidation(
-    IManagedFeatureRegistration featureRegistration,
+    IFeatureFilterRepository filterRepository,
     ILogger<FeatureChangeValidation> logger) : IFeatureChangeValidation
 {
     private readonly System.Text.Json.JsonSerializerOptions _options = new()
@@ -17,57 +18,54 @@ internal sealed class FeatureChangeValidation(
     {
         logger.LogDebug("Validating {ChangeType} operation for feature {FeatureName}", changeType, featureFlag.Name);
 
-        if (changeType != FeatureChangeType.Delete && featureRegistration.IsFeatureRegistered(featureFlag.Name))
+        
+        if (changeType != FeatureChangeType.Delete && (featureFlag.Filters is not null and { Count: > 0 }))
         {
-            logger.LogDebug("Feature {FeatureName} is a registered managed feature, validating filters",
-                featureFlag.Name);
-
-            var registeredFilter = featureRegistration.GetFeatureRegistration(featureFlag.Name);
-            if (registeredFilter is not null)
+            foreach (var filter in featureFlag.Filters)
             {
-                logger.LogDebug("Feature {FeatureName} has registered filter {FilterType}", featureFlag.Name,
-                    registeredFilter.TypeName);
-
-                //assume only one filter per feature for managed features, ui limitation
-                var newFilter = featureFlag.Filters?.FirstOrDefault(f => f.FilterType == registeredFilter.TypeName);
-                //filter is mandatory by default
-                if (newFilter is null)
+                var registeredFilter = filterRepository.GetFilterByName(filter.FilterType);
+                if (registeredFilter is not null)
                 {
-                    logger.LogWarning("Feature {FeatureName} is missing required filter {FilterType}", featureFlag.Name,
-                        registeredFilter.TypeName);
-                    return new FeatureChangeValidationResult(true,
-                        $"{featureFlag.Name} must have a {registeredFilter.TypeName} filter.");
-                }
-
-                try
-                {
-                    var settingsType = registeredFilter.DefaultSettings.GetType();
-                    logger.LogDebug("Deserializing filter parameters for feature {FeatureName} as {SettingsType}",
-                        featureFlag.Name, settingsType.Name);
-
-                    var settings =
-                        System.Text.Json.JsonSerializer.Deserialize(newFilter.Parameters ?? "{}", settingsType,
-                            _options);
-
-                    if (settings is null)
-                    {
-                        logger.LogWarning(
-                            "Feature {FeatureName} filter parameters deserialized to null for {SettingsType}",
-                            featureFlag.Name, settingsType.Name);
-                        return new FeatureChangeValidationResult(true,
-                            $"{featureFlag.Name} filter parameters are not valid JSON for {settingsType.Name}.");
-                    }
-
-                    logger.LogDebug("Filter parameters validated successfully for feature {FeatureName}",
+                    logger.LogDebug("Validating filter {FilterType} for feature {FeatureName}", filter.FilterType,
                         featureFlag.Name);
-                }
-                catch (System.Text.Json.JsonException ex)
-                {
-                    logger.LogWarning(ex,
-                        "Feature {FeatureName} filter parameters are not valid JSON for {SettingsType}",
-                        featureFlag.Name, registeredFilter.DefaultSettings.GetType().Name);
-                    return new FeatureChangeValidationResult(true,
-                        $"{featureFlag.Name} filter parameters are not valid JSON for {registeredFilter.DefaultSettings.GetType().Name}.");
+
+                    try
+                    {
+                        var settingsType = registeredFilter.SettingsType;
+
+                        if (settingsType is null)
+                        {
+                            logger.LogDebug("Filter {FilterType} does not have a settings type, skipping parameter validation", filter.FilterType);
+                            continue;
+                        }
+
+                        logger.LogDebug("Deserializing filter parameters for feature {FeatureName} as {SettingsType}",
+                            featureFlag.Name, settingsType.Name);
+
+                        var settings =
+                            System.Text.Json.JsonSerializer.Deserialize(filter.Parameters ?? "{}", settingsType,
+                                _options);
+
+                        if (settings is null)
+                        {
+                            logger.LogWarning(
+                                "Feature {FeatureName} filter parameters deserialized to null for {SettingsType}",
+                                featureFlag.Name, settingsType.Name);
+                            return new FeatureChangeValidationResult(true,
+                                $"{featureFlag.Name} filter parameters are not valid JSON for {settingsType.Name}.");
+                        }
+
+                        logger.LogDebug("Filter parameters validated successfully for filter {FilterType} on feature {FeatureName}",
+                            filter.FilterType, featureFlag.Name);
+                    }
+                    catch (System.Text.Json.JsonException ex)
+                    {
+                        logger.LogWarning(ex,
+                            "Feature {FeatureName} filter parameters are not valid JSON for {FilterType}",
+                            featureFlag.Name, filter.FilterType);
+                        return new FeatureChangeValidationResult(true,
+                            $"{featureFlag.Name} filter parameters are not valid JSON for {filter.FilterType}.");
+                    }
                 }
             }
         }

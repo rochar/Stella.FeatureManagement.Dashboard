@@ -8,7 +8,8 @@ namespace Stella.FeatureManagement.Dashboard.Services;
 /// <param name="Type">The type of the feature filter.</param>
 /// <param name="Name">The display name of the filter, usually from <see cref="FilterAliasAttribute"/>.</param>
 /// <param name="DefaultSettingsJson">The JSON-serialized default settings for this filter.</param>
-public record FilterRegistration(Type Type, string Name, string? DefaultSettingsJson);
+/// <param name="SettingsType">The type of the settings object for this filter.</param>
+public record FilterRegistration(Type Type, string Name, string? DefaultSettingsJson, Type? SettingsType = null);
 
 /// <summary>
 /// Repository for keeping track of available feature filters and their default configurations.
@@ -34,4 +35,11 @@ public interface IFeatureFilterRepository
     /// </summary>
     /// <returns>A collection of <see cref="FilterRegistration"/> containing filter metadata.</returns>
     IEnumerable<FilterRegistration> GetFilters();
+
+    /// <summary>
+    /// Gets a registered feature filter by its name (alias).
+    /// </summary>
+    /// <param name="name">The name of the filter.</param>
+    /// <returns>The <see cref="FilterRegistration"/> if found; otherwise, null.</returns>
+    FilterRegistration? GetFilterByName(string name);
 }

@@ -39,12 +39,18 @@ public class FeatureFilterRepository : IFeatureFilterRepository
         var aliasAttribute = filterType.GetCustomAttribute<FilterAliasAttribute>();
         var name = aliasAttribute?.Alias ?? filterType.Name;
 
-        _filters[filterType] = new FilterRegistration(filterType, name, JsonSerializer.Serialize(defaultSettings));
+        _filters[filterType] = new FilterRegistration(filterType, name, JsonSerializer.Serialize(defaultSettings), defaultSettings.GetType());
     }
 
     /// <inheritdoc />
     public IEnumerable<FilterRegistration> GetFilters()
     {
         return _filters.Values;
+    }
+
+    /// <inheritdoc />
+    public FilterRegistration? GetFilterByName(string name)
+    {
+        return _filters.Values.FirstOrDefault(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
     }
 }
