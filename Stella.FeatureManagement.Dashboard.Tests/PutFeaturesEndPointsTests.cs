@@ -60,7 +60,7 @@ public class PutFeaturesEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
         {
             IsEnabled = true,
             Description = "Feature with percentage filter",
-            Filter = new { FilterType = "Microsoft.Percentage", Parameters = "{\"Value\": 50}" }
+            Filters = new[] { new { FilterType = "Microsoft.Percentage", Parameters = "{\"Value\": 50}" } }
         };
 
         // Act
@@ -88,7 +88,7 @@ public class PutFeaturesEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
         var updateRequest = new
         {
             IsEnabled = true,
-            Filter = new { FilterType = "Microsoft.Percentage", Parameters = "{\"Dummy\": 50}" }
+            Filters = new[] { new { FilterType = "Microsoft.Percentage", Parameters = "{\"Dummy\": 50}" } }
         };
 
         // Act
@@ -134,12 +134,11 @@ public class PutFeaturesEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
     [InlineData(2, true)]
     public async Task WhenUpdateFilterShouldReturnEnabled(int id, bool expectedResult)
     {
-        // Arrange
         // Arrange 
         var updateRequest = new
         {
             IsEnabled = true,
-            Filter = new { FilterType = "TestFilter", Parameters = System.Text.Json.JsonSerializer.Serialize(new TestFilterSettings { Ids = [id] }) }
+            Filters = new[] { new { FilterType = "TestFilter", Parameters = System.Text.Json.JsonSerializer.Serialize(new TestFilterSettings { Ids = [id] }) } }
         };
 
         var updateResponse = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/CustomFilterFlag", updateRequest,

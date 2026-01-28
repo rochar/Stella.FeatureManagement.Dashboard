@@ -59,14 +59,19 @@ internal static class PutFeaturesExtension
         feature.Description = request.Description;
         feature.UpdatedAt = DateTime.UtcNow;
 
-        // Clear existing filters and add new one if provided
+        // Clear existing filters and add new ones if provided
         feature.Filters.Clear();
-        if (request.Filter is not null)
-            feature.Filters.Add(new FeatureFilter
+        if (request.Filters is not null)
+        {
+            foreach (var filter in request.Filters)
             {
-                FilterType = request.Filter.FilterType,
-                Parameters = request.Filter.Parameters
-            });
+                feature.Filters.Add(new FeatureFilter
+                {
+                    FilterType = filter.FilterType,
+                    Parameters = filter.Parameters
+                });
+            }
+        }
 
         await context.SaveChangesAsync();
 
@@ -84,16 +89,11 @@ internal static class PutFeaturesExtension
 /// </summary>
 /// <param name="IsEnabled">Whether the feature is enabled.</param>
 /// <param name="Description">Optional description of the feature.</param>
-/// <param name="Filter">Optional filter configuration for the feature.</param>
-internal record UpdateFeatureRequest(bool IsEnabled, string? Description = null, FeatureFilterDto? Filter = null)
+/// <param name="Filters">Optional filter configurations for the feature.</param>
+internal record UpdateFeatureRequest(bool IsEnabled, string? Description = null, List<FeatureFilterDto>? Filters = null)
 {
     public FeatureFlagDto ToDto(string name)
     {
-        return new FeatureFlagDto(name, IsEnabled, string.Empty, ToDto(Filter));
-    }
-
-    private static List<FeatureFilterDto>? ToDto(FeatureFilterDto? filter)
-    {
-        return filter is null ? null : [new FeatureFilterDto(filter.FilterType, filter.Parameters)];
+        return new FeatureFlagDto(name, IsEnabled, string.Empty, Filters);
     }
 }

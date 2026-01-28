@@ -32,13 +32,16 @@ internal static class PostFeaturesExtension
                 UpdatedAt = DateTime.UtcNow
             };
 
-            if (request.Filter is not null)
+            if (request.Filters is not null)
             {
-                feature.Filters.Add(new FeatureFilter
+                foreach (var filter in request.Filters)
                 {
-                    FilterType = request.Filter.FilterType,
-                    Parameters = request.Filter.Parameters
-                });
+                    feature.Filters.Add(new FeatureFilter
+                    {
+                        FilterType = filter.FilterType,
+                        Parameters = filter.Parameters
+                    });
+                }
             }
 
             context.FeatureFlags.Add(feature);
@@ -65,5 +68,5 @@ internal static class PostFeaturesExtension
 /// <param name="Name">The feature flag name.</param>
 /// <param name="IsEnabled">Whether the feature is enabled.</param>
 /// <param name="Description">Optional description of the feature.</param>
-/// <param name="Filter">Optional filter configuration for the feature.</param>
-internal record CreateFeatureRequest(string Name, bool IsEnabled, string? Description = null, FeatureFilterDto? Filter = null);
+/// <param name="Filters">Optional filter configurations for the feature.</param>
+internal record CreateFeatureRequest(string Name, bool IsEnabled, string? Description = null, List<FeatureFilterDto>? Filters = null);

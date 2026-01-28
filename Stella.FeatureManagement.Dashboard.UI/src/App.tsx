@@ -12,10 +12,19 @@ interface FeatureState {
   filters: FeatureFilter[]
 }
 
+interface AvailableFilter {
+  name: string
+  defaultSettings: string
+}
+
 // API base path - use VITE_API_URL if available (Aspire), otherwise fall back to relative path
 const API_BASE = import.meta.env.VITE_API_URL 
   ? `${import.meta.env.VITE_API_URL}/features/dashboardapi/features` 
   : '../dashboardapi/features'
+
+const FILTERS_API_BASE = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/features/dashboardapi/filters` 
+  : '../dashboardapi/filters'
 
 export default function App() {
   const [features, setFeatures] = useState<FeatureState[]>([])
@@ -36,6 +45,12 @@ export default function App() {
   const [savingFilter, setSavingFilter] = useState(false)
   const [deleteFilterTarget, setDeleteFilterTarget] = useState<{ featureName: string; filterIndex: number; filterType: string } | null>(null)
   const [deletingFilterInProgress, setDeletingFilterInProgress] = useState(false)
+  const [availableFilters, setAvailableFilters] = useState<AvailableFilter[]>([])
+  const [addFilterTarget, setAddFilterTarget] = useState<string | null>(null)
+  const [selectedFilterName, setSelectedFilterName] = useState<string>('')
+  const [newFilterParams, setNewFilterParams] = useState('')
+  const [newFilterJsonError, setNewFilterJsonError] = useState<string | null>(null)
+  const [addingFilter, setAddingFilter] = useState(false)
 
   const fetchFeatures = useCallback(async () => {
     try {
@@ -50,6 +65,17 @@ export default function App() {
       setError(err instanceof Error ? err.message : 'An unknown error occurred')
     } finally {
       setLoading(false)
+    }
+  }, [])
+
+  const fetchAvailableFilters = useCallback(async () => {
+    try {
+      const res = await fetch(FILTERS_API_BASE)
+      if (!res.ok) throw new Error(`Failed to fetch filters (${res.status})`)
+      const data = await res.json()
+      setAvailableFilters(data)
+    } catch (err) {
+      console.error('Failed to fetch available filters:', err)
     }
   }, [])
 
@@ -71,17 +97,17 @@ export default function App() {
 
     try {
       // Build request body with full feature properties
-      const body: { isEnabled: boolean; description: string | null; filter?: { filterType: string; parameters: string | null } } = {
+      const body: { isEnabled: boolean; description: string | null; filters?: { filterType: string; parameters: string | null }[] } = {
         isEnabled: newState,
         description: feature.description
       }
       
-      // Include filter if present
+      // Include all filters if present
       if (feature.filters.length > 0) {
-        body.filter = {
-          filterType: feature.filters[0].filterType,
-          parameters: feature.filters[0].parameters
-        }
+        body.filters = feature.filters.map(f => ({
+          filterType: f.filterType,
+          parameters: f.parameters
+        }))
       }
       
       const res = await fetch(`${API_BASE}/${featureName}`, {
@@ -222,16 +248,20 @@ export default function App() {
     setError(null)
 
     try {
+      // Update the specific filter and keep the rest
+      const updatedFilters = feature.filters.map((f, idx) => 
+        idx === editingFilter.filterIndex
+          ? { filterType: f.filterType, parameters: JSON.stringify(JSON.parse(editedParams)) }
+          : { filterType: f.filterType, parameters: f.parameters }
+      )
+
       const res = await fetch(`${API_BASE}/${feature.name}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           isEnabled: feature.isEnabled,
           description: feature.description,
-          filter: {
-            filterType: filter.filterType,
-            parameters: JSON.stringify(JSON.parse(editedParams))
-          }
+          filters: updatedFilters
         })
       })
 
@@ -269,13 +299,18 @@ export default function App() {
     setError(null)
 
     try {
+      // Remove the specific filter and keep the rest
+      const remainingFilters = feature.filters
+        .filter((_, idx) => idx !== deleteFilterTarget.filterIndex)
+        .map(f => ({ filterType: f.filterType, parameters: f.parameters }))
+
       const res = await fetch(`${API_BASE}/${feature.name}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           isEnabled: feature.isEnabled,
-          description: feature.description
-          // No filter property - this removes the filter
+          description: feature.description,
+          filters: remainingFilters.length > 0 ? remainingFilters : undefined
         })
       })
 
@@ -302,9 +337,111 @@ export default function App() {
     }
   }, [deleteFilterTarget, features])
 
+  const openAddFilterModal = useCallback((featureName: string) => {
+    setAddFilterTarget(featureName)
+    setSelectedFilterName('')
+    setNewFilterParams('')
+    setNewFilterJsonError(null)
+  }, [])
+
+  const closeAddFilterModal = useCallback(() => {
+    setAddFilterTarget(null)
+    setSelectedFilterName('')
+    setNewFilterParams('')
+    setNewFilterJsonError(null)
+  }, [])
+
+  const handleFilterSelectionChange = useCallback((filterName: string) => {
+    setSelectedFilterName(filterName)
+    const filter = availableFilters.find(f => f.name === filterName)
+    if (filter) {
+      try {
+        const formatted = JSON.stringify(JSON.parse(filter.defaultSettings), null, 2)
+        setNewFilterParams(formatted)
+        setNewFilterJsonError(null)
+      } catch {
+        setNewFilterParams(filter.defaultSettings)
+      }
+    } else {
+      setNewFilterParams('')
+    }
+  }, [availableFilters])
+
+  const handleNewFilterParamsChange = useCallback((value: string) => {
+    setNewFilterParams(value)
+    if (value.trim()) {
+      try {
+        JSON.parse(value)
+        setNewFilterJsonError(null)
+      } catch {
+        setNewFilterJsonError('Invalid JSON format')
+      }
+    } else {
+      setNewFilterJsonError(null)
+    }
+  }, [])
+
+  const addFilterToFeature = useCallback(async () => {
+    if (!addFilterTarget || !selectedFilterName) return
+    
+    // Validate JSON
+    try {
+      JSON.parse(newFilterParams)
+    } catch {
+      setNewFilterJsonError('Invalid JSON format')
+      return
+    }
+
+    const feature = features.find(f => f.name === addFilterTarget)
+    if (!feature) return
+
+    setAddingFilter(true)
+    setError(null)
+
+    try {
+      // Add the new filter to existing filters
+      const allFilters = [
+        ...feature.filters.map(f => ({ filterType: f.filterType, parameters: f.parameters })),
+        { filterType: selectedFilterName, parameters: JSON.stringify(JSON.parse(newFilterParams)) }
+      ]
+
+      const res = await fetch(`${API_BASE}/${feature.name}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isEnabled: feature.isEnabled,
+          description: feature.description,
+          filters: allFilters
+        })
+      })
+
+      if (!res.ok) {
+        let errorMsg = `Failed to add filter (${res.status})`
+        if (res.status === 400) {
+          const text = await res.text()
+          const firstLine = text.split('\n')[0]
+          if (firstLine) errorMsg += `: ${firstLine}`
+        }
+        throw new Error(errorMsg)
+      }
+
+      const updated = await res.json()
+      setFeatures(prev =>
+        prev.map(f => f.name === feature.name ? updated : f)
+      )
+      closeAddFilterModal()
+      setLastUpdated(new Date())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add filter')
+    } finally {
+      setAddingFilter(false)
+    }
+  }, [addFilterTarget, selectedFilterName, newFilterParams, features, closeAddFilterModal])
+
   useEffect(() => {
     fetchFeatures()
-  }, [fetchFeatures])
+    fetchAvailableFilters()
+  }, [fetchFeatures, fetchAvailableFilters])
 
   const filteredFeatures = features
     .filter(f => f.name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -523,7 +660,20 @@ export default function App() {
                   {expandedFeature === f.name && (
                     <div className="feature-details">
                       {f.filters.length === 0 ? (
-                        <p className="no-filters">No filters configured for this feature.</p>
+                        <div className="no-filters-container">
+                          <p className="no-filters">No filters configured for this feature.</p>
+                          {availableFilters.length > 0 && (
+                            <button
+                              className="add-filter-btn"
+                              onClick={() => openAddFilterModal(f.name)}
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 5v14M5 12h14" />
+                              </svg>
+                              Add Filter
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         <div className="filters-section">
                           {f.filters.map((filter, idx) => {
@@ -593,6 +743,17 @@ export default function App() {
                               </div>
                             )
                           })}
+                          {availableFilters.some(filter => !f.filters.some(existing => existing.filterType === filter.name)) && (
+                            <button
+                              className="add-filter-btn add-filter-btn-inline"
+                              onClick={() => openAddFilterModal(f.name)}
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 5v14M5 12h14" />
+                              </svg>
+                              Add Filter
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -676,6 +837,78 @@ export default function App() {
                 disabled={deletingFilterInProgress}
               >
                 {deletingFilterInProgress ? <span className="btn-loading btn-loading-danger"></span> : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Filter Modal */}
+      {addFilterTarget && (
+        <div className="modal-overlay" onClick={closeAddFilterModal}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Add Filter</h2>
+              <button className="modal-close" onClick={closeAddFilterModal}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="modal-subtitle">Adding filter to <strong>{addFilterTarget}</strong></p>
+              
+              <label className="modal-label">Filter Type</label>
+              <select
+                className="modal-select"
+                value={selectedFilterName}
+                onChange={(e) => handleFilterSelectionChange(e.target.value)}
+                disabled={addingFilter}
+              >
+                <option value="">Select a filter...</option>
+                {availableFilters
+                  .filter(filter => {
+                    const targetFeature = features.find(f => f.name === addFilterTarget)
+                    if (!targetFeature) return true
+                    return !targetFeature.filters.some(existingFilter => existingFilter.filterType === filter.name)
+                  })
+                  .map(filter => (
+                  <option key={filter.name} value={filter.name}>
+                    {filter.name}
+                  </option>
+                ))}
+              </select>
+
+              {selectedFilterName && (
+                <>
+                  <label className="modal-label" style={{ marginTop: '16px' }}>Parameters (JSON)</label>
+                  <textarea
+                    className={`filter-params-input ${newFilterJsonError ? 'error' : ''}`}
+                    value={newFilterParams}
+                    onChange={(e) => handleNewFilterParamsChange(e.target.value)}
+                    disabled={addingFilter}
+                    rows={8}
+                  />
+                  {newFilterJsonError && <span className="json-error">{newFilterJsonError}</span>}
+                </>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button 
+                type="button" 
+                className="modal-btn modal-btn-cancel"
+                onClick={closeAddFilterModal}
+                disabled={addingFilter}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="modal-btn modal-btn-primary"
+                onClick={addFilterToFeature}
+                disabled={addingFilter || !selectedFilterName || !!newFilterJsonError}
+              >
+                {addingFilter ? <span className="btn-loading"></span> : 'Add Filter'}
               </button>
             </div>
           </div>
