@@ -34,6 +34,8 @@ export default function App() {
   const [editedParams, setEditedParams] = useState('')
   const [jsonError, setJsonError] = useState<string | null>(null)
   const [savingFilter, setSavingFilter] = useState(false)
+  const [deleteFilterTarget, setDeleteFilterTarget] = useState<{ featureName: string; filterIndex: number; filterType: string } | null>(null)
+  const [deletingFilterInProgress, setDeletingFilterInProgress] = useState(false)
 
   const fetchFeatures = useCallback(async () => {
     try {
@@ -256,6 +258,49 @@ export default function App() {
       setSavingFilter(false)
     }
   }, [editingFilter, editedParams, features, validateJson])
+
+  const deleteFilter = useCallback(async () => {
+    if (!deleteFilterTarget) return
+
+    const feature = features.find(f => f.name === deleteFilterTarget.featureName)
+    if (!feature) return
+
+    setDeletingFilterInProgress(true)
+    setError(null)
+
+    try {
+      const res = await fetch(`${API_BASE}/${feature.name}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isEnabled: feature.isEnabled,
+          description: feature.description
+          // No filter property - this removes the filter
+        })
+      })
+
+      if (!res.ok) {
+        let errorMsg = `Failed to delete filter (${res.status})`
+        if (res.status === 400) {
+          const text = await res.text()
+          const firstLine = text.split('\n')[0]
+          if (firstLine) errorMsg += `: ${firstLine}`
+        }
+        throw new Error(errorMsg)
+      }
+
+      const updated = await res.json()
+      setFeatures(prev =>
+        prev.map(f => f.name === feature.name ? updated : f)
+      )
+      setDeleteFilterTarget(null)
+      setLastUpdated(new Date())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete filter')
+    } finally {
+      setDeletingFilterInProgress(false)
+    }
+  }, [deleteFilterTarget, features])
 
   useEffect(() => {
     fetchFeatures()
@@ -487,18 +532,31 @@ export default function App() {
                               <div key={idx} className="filter-item">
                                 <div className="filter-header">
                                   <div className="filter-type">{filter.filterType}</div>
-                                  {!isEditing && filter.parameters && (
-                                    <button
-                                      className="edit-filter-btn"
-                                      onClick={() => startEditingFilter(f.name, idx, filter.parameters)}
-                                      title="Edit parameters"
-                                    >
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                      </svg>
-                                    </button>
-                                  )}
+                                  <div className="filter-actions">
+                                    {!isEditing && filter.parameters && (
+                                      <button
+                                        className="edit-filter-btn"
+                                        onClick={() => startEditingFilter(f.name, idx, filter.parameters)}
+                                        title="Edit parameters"
+                                      >
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                        </svg>
+                                      </button>
+                                    )}
+                                    {!isEditing && (
+                                      <button
+                                        className="delete-filter-btn"
+                                        onClick={() => setDeleteFilterTarget({ featureName: f.name, filterIndex: idx, filterType: filter.filterType })}
+                                        title="Delete filter"
+                                      >
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                          <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                                        </svg>
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                                 {filter.parameters && (
                                   isEditing ? (
@@ -546,7 +604,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Feature Confirmation Modal */}
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
@@ -579,6 +637,45 @@ export default function App() {
                 disabled={deleting}
               >
                 {deleting ? <span className="btn-loading btn-loading-danger"></span> : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Filter Confirmation Modal */}
+      {deleteFilterTarget && (
+        <div className="modal-overlay" onClick={() => setDeleteFilterTarget(null)}>
+          <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Delete Filter</h2>
+              <button className="modal-close" onClick={() => setDeleteFilterTarget(null)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="delete-confirm-text">
+                Are you sure you want to delete the <strong>{deleteFilterTarget.filterType}</strong> filter from <strong>{deleteFilterTarget.featureName}</strong>?
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button 
+                type="button" 
+                className="modal-btn modal-btn-cancel"
+                onClick={() => setDeleteFilterTarget(null)}
+                disabled={deletingFilterInProgress}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="modal-btn modal-btn-danger"
+                onClick={deleteFilter}
+                disabled={deletingFilterInProgress}
+              >
+                {deletingFilterInProgress ? <span className="btn-loading btn-loading-danger"></span> : 'Delete'}
               </button>
             </div>
           </div>
