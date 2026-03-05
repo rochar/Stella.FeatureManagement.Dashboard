@@ -7,7 +7,8 @@
 /// <param name="IsEnabled">Whether the feature is enabled.</param>
 /// <param name="Description">Optional description of the feature.</param>
 /// <param name="Filters">The filters applied to this feature flag.</param>
-public record FeatureFlagDto(string Name, bool IsEnabled, string? Description, List<FeatureFilterDto>? Filters);
+/// <param name="Application">The application this feature belongs to.</param>
+public record FeatureFlagDto(string Name, bool IsEnabled, string? Description, List<FeatureFilterDto>? Filters, string Application = "Default");
 
 /// <summary>
 /// Represents a filter configuration for a feature flag.

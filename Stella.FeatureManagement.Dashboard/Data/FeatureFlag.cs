@@ -24,6 +24,12 @@ public class FeatureFlag
     public string? Description { get; set; }
 
     /// <summary>
+    /// Gets or sets the application name this feature belongs to.
+    /// Defaults to "Default".
+    /// </summary>
+    public string Application { get; set; } = "Default";
+
+    /// <summary>
     /// Gets or sets whether the feature is enabled.
     /// When true and no filters exist, feature is always on.
     /// When true with filters, all filters must pass.

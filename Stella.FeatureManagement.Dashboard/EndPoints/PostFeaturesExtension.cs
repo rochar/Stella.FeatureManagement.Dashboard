@@ -28,6 +28,7 @@ internal static class PostFeaturesExtension
                 Name = request.Name,
                 IsEnabled = request.IsEnabled,
                 Description = request.Description,
+                Application = request.Application,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -51,7 +52,8 @@ internal static class PostFeaturesExtension
                 feature.Name,
                 feature.IsEnabled,
                 feature.Description,
-                feature.Filters.Select(f => new FeatureFilterDto(f.FilterType, f.Parameters)).ToList());
+                feature.Filters.Select(f => new FeatureFilterDto(f.FilterType, f.Parameters)).ToList(),
+                feature.Application);
 
             return Results.Created($"/features/{feature.Name}", response);
         })
@@ -69,4 +71,5 @@ internal static class PostFeaturesExtension
 /// <param name="IsEnabled">Whether the feature is enabled.</param>
 /// <param name="Description">Optional description of the feature.</param>
 /// <param name="Filters">Optional filter configurations for the feature.</param>
-internal record CreateFeatureRequest(string Name, bool IsEnabled, string? Description = null, List<FeatureFilterDto>? Filters = null);
+/// <param name="Application">The application this feature belongs to. Defaults to "Default".</param>
+internal record CreateFeatureRequest(string Name, bool IsEnabled, string? Description = null, List<FeatureFilterDto>? Filters = null, string Application = "Default");

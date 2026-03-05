@@ -6,7 +6,8 @@ namespace Stella.FeatureManagement.Dashboard.Services;
 internal interface IDashboardInitializer
 {
     Task RegisterFeatureAsync(string name, string description, bool isEnabled, FilterOptions? filterOptions,
-        CancellationToken cancellationToken);
+        string application = "Default",
+        CancellationToken cancellationToken = default);
 
     Task RunMigrationsAsync(CancellationToken cancellationToken);
 }

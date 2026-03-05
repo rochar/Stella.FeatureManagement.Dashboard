@@ -19,7 +19,8 @@ internal static class GetFeaturesExtension
                     f.Name,
                     f.IsEnabled,
                     f.Description,
-                    f.Filters.Select(filter => new FeatureFilterDto(filter.FilterType, filter.Parameters)).ToList()))
+                    f.Filters.Select(filter => new FeatureFilterDto(filter.FilterType, filter.Parameters)).ToList(),
+                    f.Application))
                 .ToListAsync();
 
             return features;
@@ -35,7 +36,8 @@ internal static class GetFeaturesExtension
                     f.Name,
                     f.IsEnabled,
                     f.Description,
-                    f.Filters.Select(filter => new FeatureFilterDto(filter.FilterType, filter.Parameters)).ToList()))
+                    f.Filters.Select(filter => new FeatureFilterDto(filter.FilterType, filter.Parameters)).ToList(),
+                    f.Application))
                 .FirstOrDefaultAsync();
 
             return feature is null ? Results.NotFound() : Results.Ok(feature);

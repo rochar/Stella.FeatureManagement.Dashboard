@@ -24,10 +24,12 @@ public interface IFeatureManagerDashboardAppBuilder
     /// <param name="description">A description of the feature flag's purpose.</param>
     /// <param name="isEnabled">Indicates whether the feature flag is enabled by default.</param>
     /// <param name="filterOptions">Optional filter options to apply to the feature flag.</param>
+    /// <param name="application">The application this feature belongs to. Defaults to "Default".</param>
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
     /// <returns>A task that represents the asynchronous registration operation.</returns>
     Task RegisterManagedFeatureAsync(string name, string description, bool isEnabled,
         FilterOptions? filterOptions = null,
+        string application = "Default",
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -67,12 +69,14 @@ public interface IFeatureManagerDashboardAppBuilder
 /// <summary>
 /// Represents a managed feature flag to be registered in the dashboard.
 /// </summary>
-/// <param name="Name">The unique name of the feature flag.</param>
+/// <param name="Name">The feature flag name.</param>
 /// <param name="Description">A description of the feature flag's purpose.</param>
 /// <param name="IsEnabled">Indicates whether the feature flag is enabled by default.</param>
 /// <param name="FilterOptions">Optional filter options to apply to the feature flag.</param>
+/// <param name="Application">The application this feature belongs to. Defaults to "Default".</param>
 public sealed record ManagedFeature(
     string Name,
     string Description,
     bool IsEnabled,
-    FilterOptions? FilterOptions = null);
+    FilterOptions? FilterOptions = null,
+    string Application = "Default");

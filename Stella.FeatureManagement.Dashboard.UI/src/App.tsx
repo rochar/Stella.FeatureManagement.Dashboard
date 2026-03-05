@@ -10,6 +10,7 @@ interface FeatureState {
   isEnabled: boolean
   description: string | null
   filters: FeatureFilter[]
+  application: string
 }
 
 interface AvailableFilter {
@@ -25,6 +26,10 @@ const API_BASE = import.meta.env.VITE_API_URL
 const FILTERS_API_BASE = import.meta.env.VITE_API_URL 
   ? `${import.meta.env.VITE_API_URL}/features/dashboardapi/filters` 
   : '../dashboardapi/filters'
+
+const APPLICATIONS_API_BASE = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/features/dashboardapi/applications` 
+  : '../dashboardapi/applications'
 
 export default function App() {
   const [features, setFeatures] = useState<FeatureState[]>([])
@@ -51,6 +56,11 @@ export default function App() {
   const [newFilterParams, setNewFilterParams] = useState('')
   const [newFilterJsonError, setNewFilterJsonError] = useState<string | null>(null)
   const [addingFilter, setAddingFilter] = useState(false)
+  const [applications, setApplications] = useState<string[]>([])
+  const [selectedApplication, setSelectedApplication] = useState<string | null>(null)
+  const [newFeatureApplication, setNewFeatureApplication] = useState('Default')
+  const [showAddAppInput, setShowAddAppInput] = useState(false)
+  const [newAppName, setNewAppName] = useState('')
 
   const fetchFeatures = useCallback(async () => {
     try {
@@ -76,6 +86,17 @@ export default function App() {
       setAvailableFilters(data)
     } catch (err) {
       console.error('Failed to fetch available filters:', err)
+    }
+  }, [])
+
+  const fetchApplications = useCallback(async () => {
+    try {
+      const res = await fetch(APPLICATIONS_API_BASE)
+      if (!res.ok) throw new Error(`Failed to fetch applications (${res.status})`)
+      const data = await res.json()
+      setApplications(data)
+    } catch (err) {
+      console.error('Failed to fetch applications:', err)
     }
   }, [])
 
@@ -154,7 +175,7 @@ export default function App() {
       const res = await fetch(API_BASE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: featureName, isEnabled: false })
+        body: JSON.stringify({ name: featureName, isEnabled: false, application: newFeatureApplication })
       })
 
       if (res.status === 409) {
@@ -168,14 +189,16 @@ export default function App() {
       const created = await res.json()
       setFeatures(prev => [...prev, created])
       setNewFeatureName('')
+      setNewFeatureApplication('Default')
       setShowAddModal(false)
       setLastUpdated(new Date())
+      fetchApplications()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create feature')
     } finally {
       setCreating(false)
     }
-  }, [newFeatureName])
+  }, [newFeatureName, newFeatureApplication, fetchApplications])
 
   const deleteFeature = useCallback(async () => {
     if (!deleteTarget) return
@@ -195,6 +218,7 @@ export default function App() {
       setFeatures(prev => prev.filter(f => f.name !== deleteTarget))
       setDeleteTarget(null)
       setLastUpdated(new Date())
+      fetchApplications()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete feature')
     } finally {
@@ -441,10 +465,12 @@ export default function App() {
   useEffect(() => {
     fetchFeatures()
     fetchAvailableFilters()
-  }, [fetchFeatures, fetchAvailableFilters])
+    fetchApplications()
+  }, [fetchFeatures, fetchAvailableFilters, fetchApplications])
 
   const filteredFeatures = features
     .filter(f => f.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .filter(f => selectedApplication === null || f.application === selectedApplication)
     .sort((a, b) => a.name.localeCompare(b.name))
 
   const enabledCount = features.filter(f => f.isEnabled).length
@@ -463,7 +489,7 @@ export default function App() {
           <p className="header-subtitle">Monitor and track feature flags in your application</p>
         </div>
         <div className="header-actions">
-          <button className="add-btn" onClick={() => setShowAddModal(true)} title="Add new feature">
+          <button className="add-btn" onClick={() => { setNewFeatureApplication(selectedApplication ?? 'Default'); setShowAddModal(true); }} title="Add new feature">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 5v14M5 12h14" />
             </svg>
@@ -502,6 +528,21 @@ export default function App() {
                   disabled={creating}
                   autoFocus
                 />
+                <label htmlFor="featureApplication" className="modal-label" style={{ marginTop: '12px' }}>Application</label>
+                <select
+                  id="featureApplication"
+                  className="modal-select"
+                  value={newFeatureApplication}
+                  onChange={(e) => setNewFeatureApplication(e.target.value)}
+                  disabled={creating}
+                >
+                  {applications.map(app => (
+                    <option key={app} value={app}>{app}</option>
+                  ))}
+                  {!applications.includes(newFeatureApplication) && (
+                    <option value={newFeatureApplication}>{newFeatureApplication}</option>
+                  )}
+                </select>
               </div>
               <div className="modal-footer">
                 <button 
@@ -525,6 +566,86 @@ export default function App() {
         </div>
       )}
 
+      {/* Layout with Sidebar */}
+      <div className="dashboard-layout">
+        {/* Application Sidebar */}
+        <aside className="app-sidebar">
+          <div className="sidebar-header">
+            <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+            <span>Applications</span>
+          </div>
+          <ul className="sidebar-list">
+            <li>
+              <button
+                className={`sidebar-item ${selectedApplication === null ? 'active' : ''}`}
+                onClick={() => setSelectedApplication(null)}
+              >
+                <span className="sidebar-item-name">All</span>
+                <span className="sidebar-item-count">{features.length}</span>
+              </button>
+            </li>
+            {applications.map(app => {
+              const count = features.filter(f => f.application === app).length
+              return (
+                <li key={app}>
+                  <button
+                    className={`sidebar-item ${selectedApplication === app ? 'active' : ''}`}
+                    onClick={() => setSelectedApplication(app)}
+                  >
+                    <span className="sidebar-item-name">{app}</span>
+                    <span className="sidebar-item-count">{count}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="sidebar-add-app">
+            {showAddAppInput ? (
+              <form className="sidebar-add-form" onSubmit={(e) => {
+                e.preventDefault()
+                const name = newAppName.trim()
+                if (name && !applications.includes(name)) {
+                  setApplications(prev => [...prev, name].sort())
+                  setNewAppName('')
+                  setShowAddAppInput(false)
+                  setSelectedApplication(name)
+                }
+              }}>
+                <input
+                  className="sidebar-add-input"
+                  type="text"
+                  placeholder="Application name..."
+                  value={newAppName}
+                  onChange={(e) => setNewAppName(e.target.value)}
+                  autoFocus
+                />
+                <div className="sidebar-add-actions">
+                  <button type="submit" className="sidebar-add-confirm" disabled={!newAppName.trim() || applications.includes(newAppName.trim())}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" /></svg>
+                  </button>
+                  <button type="button" className="sidebar-add-cancel" onClick={() => { setShowAddAppInput(false); setNewAppName('') }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button className="sidebar-add-btn" onClick={() => setShowAddAppInput(true)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Add Application
+              </button>
+            )}
+          </div>
+        </aside>
+
+        {/* Main Content */}
+        <div className="dashboard-content">
       {/* Stats Cards */}
       <div className="stats-grid">
         <div className="stat-card">
@@ -764,6 +885,8 @@ export default function App() {
           </div>
         )}
       </main>
+        </div>{/* end dashboard-content */}
+      </div>{/* end dashboard-layout */}
 
       {/* Delete Feature Confirmation Modal */}
       {deleteTarget && (

@@ -59,6 +59,9 @@ internal static class PutFeaturesExtension
         feature.Description = request.Description;
         feature.UpdatedAt = DateTime.UtcNow;
 
+        if (request.Application is not null)
+            feature.Application = request.Application;
+
         // Clear existing filters and add new ones if provided
         feature.Filters.Clear();
         if (request.Filters is not null)
@@ -79,7 +82,8 @@ internal static class PutFeaturesExtension
             feature.Name,
             feature.IsEnabled,
             feature.Description,
-            feature.Filters.Select(f => new FeatureFilterDto(f.FilterType, f.Parameters)).ToList());
+            feature.Filters.Select(f => new FeatureFilterDto(f.FilterType, f.Parameters)).ToList(),
+            feature.Application);
         return response;
     }
 }
@@ -90,10 +94,11 @@ internal static class PutFeaturesExtension
 /// <param name="IsEnabled">Whether the feature is enabled.</param>
 /// <param name="Description">Optional description of the feature.</param>
 /// <param name="Filters">Optional filter configurations for the feature.</param>
-internal record UpdateFeatureRequest(bool IsEnabled, string? Description = null, List<FeatureFilterDto>? Filters = null)
+/// <param name="Application">The application this feature belongs to.</param>
+internal record UpdateFeatureRequest(bool IsEnabled, string? Description = null, List<FeatureFilterDto>? Filters = null, string? Application = null)
 {
     public FeatureFlagDto ToDto(string name)
     {
-        return new FeatureFlagDto(name, IsEnabled, string.Empty, Filters);
+        return new FeatureFlagDto(name, IsEnabled, string.Empty, Filters, Application ?? "Default");
     }
 }

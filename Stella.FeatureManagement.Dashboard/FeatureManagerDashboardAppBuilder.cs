@@ -17,12 +17,14 @@ internal class FeatureManagerDashboardAppBuilder(IEndpointRouteBuilder routeBuil
         var dashboardGroup = routeBuilder.MapGroup($"{group}/dashboard");
         var dashboardApiFilters = routeBuilder.MapGroup($"{group}/dashboardapi/filters");
         var dashboardApiFeatures = routeBuilder.MapGroup($"{group}/dashboardapi/features");
+        var dashboardApiApplications = routeBuilder.MapGroup($"{group}/dashboardapi/applications");
 
         if (configureCors is not null)
         {
             dashboardGroup.RequireCors(configureCors);
             dashboardApiFilters.RequireCors(configureCors);
             dashboardApiFeatures.RequireCors(configureCors);
+            dashboardApiApplications.RequireCors(configureCors);
             featuresGroup.RequireCors(configureCors);
         }
 
@@ -35,6 +37,8 @@ internal class FeatureManagerDashboardAppBuilder(IEndpointRouteBuilder routeBuil
             .MapPostFeatures()
             .MapPutFeatures()
             .MapDeleteFeatures();
+        dashboardApiApplications
+            .MapGetApplications();
 
         featuresGroup
             .MapGetFeaturesFromFeatureManager();
@@ -74,6 +78,7 @@ internal class FeatureManagerDashboardAppBuilder(IEndpointRouteBuilder routeBuil
 
     public async Task RegisterManagedFeatureAsync(string name, string description, bool isEnabled,
         FilterOptions? filterOptions = null,
+        string application = "Default",
         CancellationToken cancellationToken = default)
     {
         await using var scope = routeBuilder.ServiceProvider.CreateAsyncScope();
@@ -81,7 +86,7 @@ internal class FeatureManagerDashboardAppBuilder(IEndpointRouteBuilder routeBuil
             .CreateLogger(typeof(FeatureManagerDashboardAppBuilder));
 
         var initializer = scope.ServiceProvider.GetRequiredService<IDashboardInitializer>();
-        await initializer.RegisterFeatureAsync(name, description, isEnabled, filterOptions, cancellationToken);
+        await initializer.RegisterFeatureAsync(name, description, isEnabled, filterOptions, application, cancellationToken);
     }
 
     public async Task RegisterManagedFeaturesAsync(IEnumerable<ManagedFeature> features,
@@ -93,6 +98,7 @@ internal class FeatureManagerDashboardAppBuilder(IEndpointRouteBuilder routeBuil
                 feature.Description,
                 feature.IsEnabled,
                 feature.FilterOptions,
+                feature.Application,
                 cancellationToken);
     }
 }

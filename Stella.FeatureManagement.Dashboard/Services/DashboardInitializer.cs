@@ -14,6 +14,7 @@ internal sealed class DashboardInitializer(IManagedFeatureRegistration managedFe
     /// <inheritdoc />
     public async Task RegisterFeatureAsync(string name, string description, bool isEnabled,
         FilterOptions? filterOptions,
+        string application = "Default",
         CancellationToken cancellationToken = default)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
@@ -32,6 +33,7 @@ internal sealed class DashboardInitializer(IManagedFeatureRegistration managedFe
                 Name = name,
                 IsEnabled = isEnabled,
                 Description = description,
+                Application = application,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };

@@ -37,6 +37,8 @@ internal class FeatureFlagDbContext : DbContext
             entity.HasIndex(e => e.Name).IsUnique();
             entity.Property(e => e.Name).HasMaxLength(256).IsRequired();
 
+            entity.Property(e => e.Application).HasMaxLength(256).IsRequired().HasDefaultValue("Default");
+
             entity.HasMany(e => e.Filters)
                 .WithOne(f => f.FeatureFlag)
                 .HasForeignKey(f => f.FeatureFlagId)
