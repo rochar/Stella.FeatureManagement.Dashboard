@@ -275,7 +275,7 @@ MyApp/
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\\..\\src\\MyApp.AppHost\\MyApp.AppHost.csproj" />
+    <ProjectReference Include="..\..\src\MyApp.AppHost\MyApp.AppHost.csproj" />
   </ItemGroup>
 </Project>
 ```

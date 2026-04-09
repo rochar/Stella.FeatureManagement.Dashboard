@@ -20,9 +20,17 @@ ${FOCUS_ON_EXTENSIBILITY=true|false} <!-- Emphasize extension points and pattern
 "Create a comprehensive 'Project_Architecture_Blueprint.md' document that thoroughly analyzes the architectural patterns in the codebase to serve as a definitive reference for maintaining architectural consistency. Use the following approach:
 
 ### 1. Architecture Detection and Analysis
-- ${PROJECT_TYPE == "Auto-detect" ? "Analyze the project structure to identify all technology stacks and frameworks in use by examining:\n  - Project and configuration files\n  - Package dependencies and import statements\n  - Framework-specific patterns and conventions\n  - Build and deployment configurations" : "Focus on ${PROJECT_TYPE} specific patterns and practices"}
+- ${PROJECT_TYPE == "Auto-detect" ? "Analyze the project structure to identify all technology stacks and frameworks in use by examining:
+  - Project and configuration files
+  - Package dependencies and import statements
+  - Framework-specific patterns and conventions
+  - Build and deployment configurations" : "Focus on ${PROJECT_TYPE} specific patterns and practices"}
   
-- ${ARCHITECTURE_PATTERN == "Auto-detect" ? "Determine the architectural pattern(s) by analyzing:\n  - Folder organization and namespacing\n  - Dependency flow and component boundaries\n  - Interface segregation and abstraction patterns\n  - Communication mechanisms between components" : "Document how the ${ARCHITECTURE_PATTERN} architecture is implemented"}
+- ${ARCHITECTURE_PATTERN == "Auto-detect" ? "Determine the architectural pattern(s) by analyzing:
+  - Folder organization and namespacing
+  - Dependency flow and component boundaries
+  - Interface segregation and abstraction patterns
+  - Communication mechanisms between components" : "Document how the ${ARCHITECTURE_PATTERN} architecture is implemented"}
 
 ### 2. Architectural Overview
 - Provide a clear, concise explanation of the overall architectural approach
@@ -124,23 +132,82 @@ Document implementation patterns for cross-cutting concerns:
 ${PROJECT_TYPE == "Auto-detect" ? "For each detected technology stack, document specific architectural patterns:" : `Document ${PROJECT_TYPE}-specific architectural patterns:`}
 
 ${(PROJECT_TYPE == ".NET" || PROJECT_TYPE == "Auto-detect") ? 
-"#### .NET Architectural Patterns (if detected)\n- Host and application model implementation\n- Middleware pipeline organization\n- Framework service integration patterns\n- ORM and data access approaches\n- API implementation patterns (controllers, minimal APIs, etc.)\n- Dependency injection container configuration" : ""}
+"#### .NET Architectural Patterns (if detected)
+- Host and application model implementation
+- Middleware pipeline organization
+- Framework service integration patterns
+- ORM and data access approaches
+- API implementation patterns (controllers, minimal APIs, etc.)
+- Dependency injection container configuration" : ""}
 
 ${(PROJECT_TYPE == "Java" || PROJECT_TYPE == "Auto-detect") ? 
-"#### Java Architectural Patterns (if detected)\n- Application container and bootstrap process\n- Dependency injection framework usage (Spring, CDI, etc.)\n- AOP implementation patterns\n- Transaction boundary management\n- ORM configuration and usage patterns\n- Service implementation patterns" : ""}
+"#### Java Architectural Patterns (if detected)
+- Application container and bootstrap process
+- Dependency injection framework usage (Spring, CDI, etc.)
+- AOP implementation patterns
+- Transaction boundary management
+- ORM configuration and usage patterns
+- Service implementation patterns" : ""}
 
 ${(PROJECT_TYPE == "React" || PROJECT_TYPE == "Auto-detect") ? 
-"#### React Architectural Patterns (if detected)\n- Component composition and reuse strategies\n- State management architecture\n- Side effect handling patterns\n- Routing and navigation approach\n- Data fetching and caching patterns\n- Rendering optimization strategies" : ""}
+"#### React Architectural Patterns (if detected)
+- Component composition and reuse strategies
+- State management architecture
+- Side effect handling patterns
+- Routing and navigation approach
+- Data fetching and caching patterns
+- Rendering optimization strategies" : ""}
 
 ${(PROJECT_TYPE == "Angular" || PROJECT_TYPE == "Auto-detect") ? 
-"#### Angular Architectural Patterns (if detected)\n- Module organization strategy\n- Component hierarchy design\n- Service and dependency injection patterns\n- State management approach\n- Reactive programming patterns\n- Route guard implementation" : ""}
+"#### Angular Architectural Patterns (if detected)
+- Module organization strategy
+- Component hierarchy design
+- Service and dependency injection patterns
+- State management approach
+- Reactive programming patterns
+- Route guard implementation" : ""}
 
 ${(PROJECT_TYPE == "Python" || PROJECT_TYPE == "Auto-detect") ? 
-"#### Python Architectural Patterns (if detected)\n- Module organization approach\n- Dependency management strategy\n- OOP vs. functional implementation patterns\n- Framework integration patterns\n- Asynchronous programming approach" : ""}
+"#### Python Architectural Patterns (if detected)
+- Module organization approach
+- Dependency management strategy
+- OOP vs. functional implementation patterns
+- Framework integration patterns
+- Asynchronous programming approach" : ""}
 
 ### 10. Implementation Patterns
 ${INCLUDES_IMPLEMENTATION_PATTERNS ? 
-"Document concrete implementation patterns for key architectural components:\n\n- **Interface Design Patterns**:\n  - Interface segregation approaches\n  - Abstraction level decisions\n  - Generic vs. specific interface patterns\n  - Default implementation patterns\n\n- **Service Implementation Patterns**:\n  - Service lifetime management\n  - Service composition patterns\n  - Operation implementation templates\n  - Error handling within services\n\n- **Repository Implementation Patterns**:\n  - Query pattern implementations\n  - Transaction management\n  - Concurrency handling\n  - Bulk operation patterns\n\n- **Controller/API Implementation Patterns**:\n  - Request handling patterns\n  - Response formatting approaches\n  - Parameter validation\n  - API versioning implementation\n\n- **Domain Model Implementation**:\n  - Entity implementation patterns\n  - Value object patterns\n  - Domain event implementation\n  - Business rule enforcement" : "Mention that detailed implementation patterns vary across the codebase."}
+"Document concrete implementation patterns for key architectural components:
+
+- **Interface Design Patterns**:
+  - Interface segregation approaches
+  - Abstraction level decisions
+  - Generic vs. specific interface patterns
+  - Default implementation patterns
+
+- **Service Implementation Patterns**:
+  - Service lifetime management
+  - Service composition patterns
+  - Operation implementation templates
+  - Error handling within services
+
+- **Repository Implementation Patterns**:
+  - Query pattern implementations
+  - Transaction management
+  - Concurrency handling
+  - Bulk operation patterns
+
+- **Controller/API Implementation Patterns**:
+  - Request handling patterns
+  - Response formatting approaches
+  - Parameter validation
+  - API versioning implementation
+
+- **Domain Model Implementation**:
+  - Entity implementation patterns
+  - Value object patterns
+  - Domain event implementation
+  - Business rule enforcement" : "Mention that detailed implementation patterns vary across the codebase."}
 
 ### 11. Testing Architecture
 - Document testing strategies aligned with the architecture
@@ -159,13 +226,71 @@ ${INCLUDES_IMPLEMENTATION_PATTERNS ?
 
 ### 13. Extension and Evolution Patterns
 ${FOCUS_ON_EXTENSIBILITY ? 
-"Provide detailed guidance for extending the architecture:\n\n- **Feature Addition Patterns**:\n  - How to add new features while preserving architectural integrity\n  - Where to place new components by type\n  - Dependency introduction guidelines\n  - Configuration extension patterns\n\n- **Modification Patterns**:\n  - How to safely modify existing components\n  - Strategies for maintaining backward compatibility\n  - Deprecation patterns\n  - Migration approaches\n\n- **Integration Patterns**:\n  - How to integrate new external systems\n  - Adapter implementation patterns\n  - Anti-corruption layer patterns\n  - Service facade implementation" : "Document key extension points in the architecture."}
+"Provide detailed guidance for extending the architecture:
+
+- **Feature Addition Patterns**:
+  - How to add new features while preserving architectural integrity
+  - Where to place new components by type
+  - Dependency introduction guidelines
+  - Configuration extension patterns
+
+- **Modification Patterns**:
+  - How to safely modify existing components
+  - Strategies for maintaining backward compatibility
+  - Deprecation patterns
+  - Migration approaches
+
+- **Integration Patterns**:
+  - How to integrate new external systems
+  - Adapter implementation patterns
+  - Anti-corruption layer patterns
+  - Service facade implementation" : "Document key extension points in the architecture."}
 
 ${INCLUDES_CODE_EXAMPLES ? 
-"### 14. Architectural Pattern Examples\nExtract representative code examples that illustrate key architectural patterns:\n\n- **Layer Separation Examples**:\n  - Interface definition and implementation separation\n  - Cross-layer communication patterns\n  - Dependency injection examples\n\n- **Component Communication Examples**:\n  - Service invocation patterns\n  - Event publication and handling\n  - Message passing implementation\n\n- **Extension Point Examples**:\n  - Plugin registration and discovery\n  - Extension interface implementations\n  - Configuration-driven extension patterns\n\nInclude enough context with each example to show the pattern clearly, but keep examples concise and focused on architectural concepts." : ""}
+"### 14. Architectural Pattern Examples
+Extract representative code examples that illustrate key architectural patterns:
+
+- **Layer Separation Examples**:
+  - Interface definition and implementation separation
+  - Cross-layer communication patterns
+  - Dependency injection examples
+
+- **Component Communication Examples**:
+  - Service invocation patterns
+  - Event publication and handling
+  - Message passing implementation
+
+- **Extension Point Examples**:
+  - Plugin registration and discovery
+  - Extension interface implementations
+  - Configuration-driven extension patterns
+
+Include enough context with each example to show the pattern clearly, but keep examples concise and focused on architectural concepts." : ""}
 
 ${INCLUDES_DECISION_RECORDS ? 
-"### 15. Architectural Decision Records\nDocument key architectural decisions evident in the codebase:\n\n- **Architectural Style Decisions**:\n  - Why the current architectural pattern was chosen\n  - Alternatives considered (based on code evolution)\n  - Constraints that influenced the decision\n\n- **Technology Selection Decisions**:\n  - Key technology choices and their architectural impact\n  - Framework selection rationales\n  - Custom vs. off-the-shelf component decisions\n\n- **Implementation Approach Decisions**:\n  - Specific implementation patterns chosen\n  - Standard pattern adaptations\n  - Performance vs. maintainability tradeoffs\n\nFor each decision, note:\n- Context that made the decision necessary\n- Factors considered in making the decision\n- Resulting consequences (positive and negative)\n- Future flexibility or limitations introduced" : ""}
+"### 15. Architectural Decision Records
+Document key architectural decisions evident in the codebase:
+
+- **Architectural Style Decisions**:
+  - Why the current architectural pattern was chosen
+  - Alternatives considered (based on code evolution)
+  - Constraints that influenced the decision
+
+- **Technology Selection Decisions**:
+  - Key technology choices and their architectural impact
+  - Framework selection rationales
+  - Custom vs. off-the-shelf component decisions
+
+- **Implementation Approach Decisions**:
+  - Specific implementation patterns chosen
+  - Standard pattern adaptations
+  - Performance vs. maintainability tradeoffs
+
+For each decision, note:
+- Context that made the decision necessary
+- Factors considered in making the decision
+- Resulting consequences (positive and negative)
+- Future flexibility or limitations introduced" : ""}
 
 ### ${INCLUDES_DECISION_RECORDS ? "16" : INCLUDES_CODE_EXAMPLES ? "15" : "14"}. Architecture Governance
 - Document how architectural consistency is maintained

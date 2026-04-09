@@ -18,7 +18,7 @@ All polyglot `Add*App()` methods create `ExecutableResource` instances under the
 
 ## Official (Microsoft-maintained)
 
-### .NET / C#
+### .NET / C\#
 
 ```csharp
 builder.AddProject<Projects.MyApi>("api")

@@ -115,7 +115,7 @@ Generates:
 | `.WithVolume()` | `volumes:` | `PersistentVolumeClaim` | Azure Files |
 | `.WithHttpEndpoint()` | `ports:` | `Service` port | Ingress |
 | `.WithExternalHttpEndpoints()` | `ports:` (host) | `Ingress` / `LoadBalancer` | External ingress |
-| `AddParameter(secret: true)` | `.env` file | `Secret` resource | Key Vault reference |
+| `AddParameter(secret: true)` | `.env` file | `Secret` | Key Vault reference |
 
 ---
 
