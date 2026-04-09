@@ -18,7 +18,7 @@ internal static class GetFeaturesFromFeatureManager
             HttpContext httpContext) =>
         {
             var parameters = httpContext.Request.Query
-                .ToDictionary(q => q.Key, q => q.Value.ToString())
+                .ToDictionary(q => q.Key, q => q.Value.ToString(), StringComparer.OrdinalIgnoreCase)
                 .AsReadOnly();
 
             httpContext.Items[FeatureEvaluationRequestContext.HttpContextItemsKey] = parameters;

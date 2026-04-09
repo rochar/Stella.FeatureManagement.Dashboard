@@ -11,7 +11,8 @@ internal sealed class FeatureEvaluationRequestContext(IHttpContextAccessor httpC
 {
     internal const string HttpContextItemsKey = "Stella.FeatureEvaluation.Parameters";
 
-    private static readonly IReadOnlyDictionary<string, string> Empty = new Dictionary<string, string>();
+    private static readonly IReadOnlyDictionary<string, string> Empty =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc />
     public IReadOnlyDictionary<string, string> Parameters =>
