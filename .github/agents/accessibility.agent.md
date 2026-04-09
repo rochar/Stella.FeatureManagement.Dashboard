@@ -206,7 +206,7 @@ You help teams deliver software that is inclusive, compliant, and pleasant to us
 
 ## Diff Review Flow (for Copilot Code Suggestions)
 
-1. Semantic correctness: elements/roles/names meaningful?
+1. Semantic correctness: elements/roles/labels meaningful?
 2. Keyboard behavior: tab/shift+tab order, space/enter activation
 3. Focus management: initial focus, trap as needed, restore focus
 4. Announcements: live regions for async outcomes/route changes
