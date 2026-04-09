@@ -42,6 +42,28 @@ public class GetFeaturesEndPointTests(WebApp webApp) : IClassFixture<WebApp>
     }
 
     [Fact]
+    public async Task WhenGetFeatureWithQueryStringParamMatchingFilterId()
+    {
+        // CustomFilterFlag uses TestFilter with Ids=[3,4], passing id=3 should enable it
+        var response = await _client.GetAsync("features/CustomFilterFlag?id=3", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var result = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        bool.Parse(result).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenGetFeatureWithQueryStringParamNotMatchingFilterId()
+    {
+        // CustomFilterFlag uses TestFilter with Ids=[3,4], passing id=99 falls back to Contains(2) which is false
+        var response = await _client.GetAsync("features/CustomFilterFlag?id=99", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var result = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        bool.Parse(result).ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task WhenGetDashboardReturnsHtml()
     {
         // Act

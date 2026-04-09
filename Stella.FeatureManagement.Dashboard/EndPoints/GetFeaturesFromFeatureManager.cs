@@ -8,15 +8,23 @@ namespace Stella.FeatureManagement.Dashboard.EndPoints;
 internal static class GetFeaturesFromFeatureManager
 {
     /// <summary>
-    /// Endpoint to get a feature and its state from Feature Management
+    ///     Endpoint to get a feature and its state from Feature Management.
+    ///     Query string parameters are captured into <see cref="IFeatureEvaluationRequestContext" />
+    ///     so custom feature filters can access them via dependency injection.
     /// </summary>
-    /// <param name="routeGroup"></param>
-    /// <returns></returns>
     public static RouteGroupBuilder MapGetFeaturesFromFeatureManager(this RouteGroupBuilder routeGroup)
     {
+        routeGroup.MapGet("{featureName}", async (string featureName, IFeatureManager featureManager,
+            HttpContext httpContext) =>
+        {
+            var parameters = httpContext.Request.Query
+                .ToDictionary(q => q.Key, q => q.Value.ToString())
+                .AsReadOnly();
 
-        routeGroup.MapGet("{featureName}", async (string featureName, IFeatureManager featureManager) =>
-            await featureManager.IsEnabledAsync(featureName)).Produces<bool>(200);
+            httpContext.Items[FeatureEvaluationRequestContext.HttpContextItemsKey] = parameters;
+
+            return await featureManager.IsEnabledAsync(featureName);
+        }).Produces<bool>(200);
 
         return routeGroup;
     }
