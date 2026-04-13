@@ -62,7 +62,35 @@ Once your application is running, access the web dashboard at:
 ./features/dashboard/
 ```
 
-### 3. REST API
+### 3. Rate Limiting
+
+You can protect the `/features/{featureName}` endpoint with rate limiting by registering a policy and passing its name:
+
+```csharp
+using System.Threading.RateLimiting;
+using Stella.FeatureManagement.Dashboard;
+
+// Register a rate limiting policy
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("featuresPolicy", opt =>
+    {
+        opt.Window = TimeSpan.FromSeconds(10);
+        opt.PermitLimit = 100;
+        opt.QueueLimit = 0;
+    });
+});
+
+var app = builder.Build();
+
+// Enable the rate limiter middleware
+app.UseRateLimiter();
+
+// Pass the policy name to UseFeaturesDashboard
+var featureDashboard = app.UseFeaturesDashboard(rateLimitingPolicy: "featuresPolicy");
+```
+
+### 4. REST API
 
 You can also query feature flags programmatically via the REST API:
 

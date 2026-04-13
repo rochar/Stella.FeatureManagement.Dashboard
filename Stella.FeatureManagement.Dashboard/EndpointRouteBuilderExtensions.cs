@@ -20,13 +20,19 @@ public static class EndpointRouteBuilderExtensions
     /// <param name="routeBuilder">The <see cref="IEndpointRouteBuilder"/> to add dashboard endpoints to.</param>
     /// <param name="group">The route prefix for the dashboard endpoints. Defaults to "/features".</param>
     /// <param name="configureCors">Optional action to configure CORS policy for the dashboard endpoints.</param>
+    /// <param name="rateLimitingPolicy">
+    /// Optional name of a rate limiting policy to apply to the <c>/features/{featureName}</c> endpoint.
+    /// The policy must be registered via <c>AddRateLimiter</c> before calling this method.
+    /// When <c>null</c>, no rate limiting is applied.
+    /// </param>
     /// <returns>An <see cref="IFeatureManagerDashboardAppBuilder"/> that can be used to further configure the dashboard.</returns>
     public static IFeatureManagerDashboardAppBuilder UseFeaturesDashboard(this IEndpointRouteBuilder routeBuilder,
         string group = "/features",
-        Action<CorsPolicyBuilder>? configureCors = null)
+        Action<CorsPolicyBuilder>? configureCors = null,
+        string? rateLimitingPolicy = null)
     {
         var builder = new FeatureManagerDashboardAppBuilder(routeBuilder);
-        builder.UseFeaturesDashboard(group, configureCors);
+        builder.UseFeaturesDashboard(group, configureCors, rateLimitingPolicy);
         return builder;
     }
 }

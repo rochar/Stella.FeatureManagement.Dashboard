@@ -11,7 +11,8 @@ namespace Stella.FeatureManagement.Dashboard;
 internal class FeatureManagerDashboardAppBuilder(IEndpointRouteBuilder routeBuilder) : IFeatureManagerDashboardAppBuilder
 {
     public void UseFeaturesDashboard(string group = "/features",
-        Action<CorsPolicyBuilder>? configureCors = null)
+        Action<CorsPolicyBuilder>? configureCors = null,
+        string? rateLimitingPolicy = null)
     {
         var featuresGroup = routeBuilder.MapGroup($"{group}");
         var dashboardGroup = routeBuilder.MapGroup($"{group}/dashboard");
@@ -26,6 +27,11 @@ internal class FeatureManagerDashboardAppBuilder(IEndpointRouteBuilder routeBuil
             dashboardApiFeatures.RequireCors(configureCors);
             dashboardApiApplications.RequireCors(configureCors);
             featuresGroup.RequireCors(configureCors);
+        }
+
+        if (rateLimitingPolicy is not null)
+        {
+            featuresGroup.RequireRateLimiting(rateLimitingPolicy);
         }
 
         dashboardGroup
