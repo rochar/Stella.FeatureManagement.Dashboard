@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "stella-agentic": {
+      "source": {
+        "source": "github",
+        "repo": "rochar/stella.agentic.workflow"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "stella-agentic-workflow-docs@stella-agentic": true
+  }
+}
