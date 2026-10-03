@@ -1,13 +1,14 @@
-# NNNN — <title>
-
-- Status: proposed | in-progress | done | abandoned
-- Spec: <NNNN-slug, or none>
-- ADRs: <accepted ADRs this plan relies on or must respect, as NNNN-slug, comma-separated, or none>
-- Date: YYYY-MM-DD
-
+---
+id: PLAN-YYYYMMDD-slug
+status: proposed # proposed | in-progress | done | abandoned
+date: YYYY-MM-DD
+spec: <SPEC-YYYYMMDD-slug, or none>
+adrs: <accepted ADRs this plan relies on, as ADR-YYYYMMDD-slug, comma-separated, or none>
+summary: <what this plan does, in one line>
+---
 ## Approach
 <how it will be done: chosen design, root cause for a bug; alternatives rejected, one line
-each. A decision that outlives this plan becomes a new ADR — list it in `ADRs:`>
+each. A decision that outlives this plan becomes a new ADR — list it in `adrs:`>
 
 ## Steps
 <group into phases when the plan is long; otherwise drop the phase headings>

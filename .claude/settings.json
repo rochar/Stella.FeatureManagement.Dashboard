@@ -1,4 +1,9 @@
 {
+  "enabledPlugins": {
+    "stella-agentic-workflow-docs@stella-agentic": true,
+    "csharp-lsp@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true
+  },
   "extraKnownMarketplaces": {
     "stella-agentic": {
       "source": {
@@ -6,8 +11,5 @@
         "repo": "rochar/stella.agentic.workflow"
       }
     }
-  },
-  "enabledPlugins": {
-    "stella-agentic-workflow-docs@stella-agentic": true
   }
 }

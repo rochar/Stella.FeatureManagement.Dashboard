@@ -1,10 +1,11 @@
-# NNNN — <title>
-
-- Status: draft | approved | implemented | abandoned
-- Type: feature | bug | change
-- Source: <ticket/issue link, or none>
-- Date: YYYY-MM-DD
-
+---
+id: SPEC-YYYYMMDD-slug
+status: draft # draft | approved | implemented | abandoned
+type: feature # feature | bug | change
+date: YYYY-MM-DD
+source: <ticket/issue link, or none>
+summary: <what is needed and why, in one line>
+---
 ## Objective
 <what is needed and why, and who benefits — self-contained, do not assume tracker access>
 

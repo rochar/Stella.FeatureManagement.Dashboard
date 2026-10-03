@@ -1,9 +1,10 @@
-# NNNN — <title>
-
-- Type: environment | external-system | domain-rule | ownership
-- Date: YYYY-MM-DD
-- Verified: YYYY-MM-DD
-
+---
+id: MEM-YYYYMMDD-slug
+type: environment # environment | external-system | domain-rule | ownership
+date: YYYY-MM-DD
+verified: YYYY-MM-DD
+summary: <the fact in one line>
+---
 ## Fact
 <the durable fact — self-contained, not derivable from code or git history>
 
