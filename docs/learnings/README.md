@@ -38,4 +38,4 @@ keep the whole line at most 120 characters.
 
 ## Index
 
-_No learnings yet._
+- LRN-20261003-aspire-postgres-image — Pin AppHost Postgres tag (18) before WithDataVolume; an unpinned default can break the volume

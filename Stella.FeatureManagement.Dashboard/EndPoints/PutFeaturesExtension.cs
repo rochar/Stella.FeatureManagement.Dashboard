@@ -33,7 +33,7 @@ internal static class PutFeaturesExtension
                     return Results.NotFound(new { message = $"Feature '{featureName}' not found." });
                 }
 
-                var canProceed = featureChangeValidation.CanProceed(request.ToDto(featureName), FeatureChangeType.Update);
+                var canProceed = featureChangeValidation.CanProceed(request.ToDto(featureName, feature.Application), FeatureChangeType.Update);
 
                 if (canProceed.Cancel)
                 {
@@ -97,8 +97,8 @@ internal static class PutFeaturesExtension
 /// <param name="Application">The application this feature belongs to.</param>
 internal record UpdateFeatureRequest(bool IsEnabled, string? Description = null, List<FeatureFilterDto>? Filters = null, string? Application = null)
 {
-    public FeatureFlagDto ToDto(string name)
+    public FeatureFlagDto ToDto(string name, string currentApplication)
     {
-        return new FeatureFlagDto(name, IsEnabled, string.Empty, Filters, Application ?? "Default");
+        return new FeatureFlagDto(name, IsEnabled, Description, Filters, Application ?? currentApplication);
     }
 }

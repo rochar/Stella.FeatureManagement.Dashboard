@@ -31,6 +31,39 @@ const APPLICATIONS_API_BASE = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/features/dashboardapi/applications` 
   : '../dashboardapi/applications'
 
+const featureUrl = (name: string) => `${API_BASE}/${encodeURIComponent(name)}`
+
+// The PUT endpoint replaces the whole feature, so send the current state with `changes` applied on top.
+// Throws with the server's first-line message on 400 (validation / OnFeatureChanging rejections).
+async function putFeature(
+  feature: FeatureState,
+  changes: Partial<Pick<FeatureState, 'isEnabled' | 'description' | 'filters'>>,
+  failureMessage: string
+): Promise<Response> {
+  const { isEnabled, description, filters } = { ...feature, ...changes }
+  const res = await fetch(featureUrl(feature.name), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      isEnabled,
+      description,
+      filters: filters.length > 0
+        ? filters.map(f => ({ filterType: f.filterType, parameters: f.parameters }))
+        : undefined
+    })
+  })
+
+  if (!res.ok) {
+    let errorMsg = `${failureMessage} (${res.status})`
+    if (res.status === 400) {
+      const firstLine = (await res.text()).split('\n')[0]
+      if (firstLine) errorMsg += `: ${firstLine}`
+    }
+    throw new Error(errorMsg)
+  }
+  return res
+}
+
 export default function App() {
   const [features, setFeatures] = useState<FeatureState[]>([])
   const [loading, setLoading] = useState(true)
@@ -59,6 +92,9 @@ export default function App() {
   const [applications, setApplications] = useState<string[]>([])
   const [selectedApplication, setSelectedApplication] = useState<string | null>(null)
   const [newFeatureApplication, setNewFeatureApplication] = useState('Default')
+  const [newFeatureDescription, setNewFeatureDescription] = useState('')
+  const [editingDescription, setEditingDescription] = useState<{ featureName: string; value: string } | null>(null)
+  const [savingDescription, setSavingDescription] = useState(false)
   const [showAddAppInput, setShowAddAppInput] = useState(false)
   const [newAppName, setNewAppName] = useState('')
 
@@ -117,35 +153,7 @@ export default function App() {
     )
 
     try {
-      // Build request body with full feature properties
-      const body: { isEnabled: boolean; description: string | null; filters?: { filterType: string; parameters: string | null }[] } = {
-        isEnabled: newState,
-        description: feature.description
-      }
-      
-      // Include all filters if present
-      if (feature.filters.length > 0) {
-        body.filters = feature.filters.map(f => ({
-          filterType: f.filterType,
-          parameters: f.parameters
-        }))
-      }
-      
-      const res = await fetch(`${API_BASE}/${featureName}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-
-      if (!res.ok) {
-        let errorMsg = `Failed to update feature (${res.status})`
-        if (res.status === 400) {
-          const text = await res.text()
-          const firstLine = text.split('\n')[0]
-          if (firstLine) errorMsg += `: ${firstLine}`
-        }
-        throw new Error(errorMsg)
-      }
+      await putFeature(feature, { isEnabled: newState }, 'Failed to update feature')
 
       setLastUpdated(new Date())
     } catch (err) {
@@ -175,7 +183,12 @@ export default function App() {
       const res = await fetch(API_BASE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: featureName, isEnabled: false, application: newFeatureApplication })
+        body: JSON.stringify({
+          name: featureName,
+          isEnabled: false,
+          description: newFeatureDescription.trim() || null,
+          application: newFeatureApplication
+        })
       })
 
       if (res.status === 409) {
@@ -190,6 +203,7 @@ export default function App() {
       setFeatures(prev => [...prev, created])
       setNewFeatureName('')
       setNewFeatureApplication('Default')
+      setNewFeatureDescription('')
       setShowAddModal(false)
       setLastUpdated(new Date())
       fetchApplications()
@@ -198,7 +212,38 @@ export default function App() {
     } finally {
       setCreating(false)
     }
-  }, [newFeatureName, newFeatureApplication, fetchApplications])
+  }, [newFeatureName, newFeatureApplication, newFeatureDescription, fetchApplications])
+
+  const saveDescription = useCallback(async () => {
+    if (!editingDescription) return
+    // A toggle PUT for the same feature is in flight: both PUTs replace the whole feature, so the last one wins.
+    if (updating === editingDescription.featureName) return
+    const feature = features.find(f => f.name === editingDescription.featureName)
+    if (!feature) return
+
+    const description = editingDescription.value.trim() || null
+
+    // Unchanged: skip the PUT, which would rewrite the filters, bump UpdatedAt and run OnFeatureChanging.
+    if (description === (feature.description?.trim() || null)) {
+      setEditingDescription(null)
+      return
+    }
+
+    setSavingDescription(true)
+    setError(null)
+
+    try {
+      await putFeature(feature, { description }, 'Failed to update description')
+
+      setFeatures(prev => prev.map(f => f.name === feature.name ? { ...f, description } : f))
+      setEditingDescription(null)
+      setLastUpdated(new Date())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update description')
+    } finally {
+      setSavingDescription(false)
+    }
+  }, [editingDescription, features, updating])
 
   const deleteFeature = useCallback(async () => {
     if (!deleteTarget) return
@@ -207,7 +252,7 @@ export default function App() {
     setError(null)
 
     try {
-      const res = await fetch(`${API_BASE}/${deleteTarget}`, {
+      const res = await fetch(featureUrl(deleteTarget), {
         method: 'DELETE'
       })
 
@@ -273,32 +318,13 @@ export default function App() {
 
     try {
       // Update the specific filter and keep the rest
-      const updatedFilters = feature.filters.map((f, idx) => 
+      const updatedFilters = feature.filters.map((f, idx) =>
         idx === editingFilter.filterIndex
           ? { filterType: f.filterType, parameters: JSON.stringify(JSON.parse(editedParams)) }
-          : { filterType: f.filterType, parameters: f.parameters }
+          : f
       )
 
-      const res = await fetch(`${API_BASE}/${feature.name}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          isEnabled: feature.isEnabled,
-          description: feature.description,
-          filters: updatedFilters
-        })
-      })
-
-      if (!res.ok) {
-        let errorMsg = `Failed to update filter (${res.status})`
-        if (res.status === 400) {
-          const text = await res.text()
-          const firstLine = text.split('\n')[0]
-          if (firstLine) errorMsg += `: ${firstLine}`
-        }
-        throw new Error(errorMsg)
-      }
-
+      const res = await putFeature(feature, { filters: updatedFilters }, 'Failed to update filter')
       const updated = await res.json()
       setFeatures(prev =>
         prev.map(f => f.name === feature.name ? updated : f)
@@ -324,30 +350,9 @@ export default function App() {
 
     try {
       // Remove the specific filter and keep the rest
-      const remainingFilters = feature.filters
-        .filter((_, idx) => idx !== deleteFilterTarget.filterIndex)
-        .map(f => ({ filterType: f.filterType, parameters: f.parameters }))
+      const remainingFilters = feature.filters.filter((_, idx) => idx !== deleteFilterTarget.filterIndex)
 
-      const res = await fetch(`${API_BASE}/${feature.name}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          isEnabled: feature.isEnabled,
-          description: feature.description,
-          filters: remainingFilters.length > 0 ? remainingFilters : undefined
-        })
-      })
-
-      if (!res.ok) {
-        let errorMsg = `Failed to delete filter (${res.status})`
-        if (res.status === 400) {
-          const text = await res.text()
-          const firstLine = text.split('\n')[0]
-          if (firstLine) errorMsg += `: ${firstLine}`
-        }
-        throw new Error(errorMsg)
-      }
-
+      const res = await putFeature(feature, { filters: remainingFilters }, 'Failed to delete filter')
       const updated = await res.json()
       setFeatures(prev =>
         prev.map(f => f.name === feature.name ? updated : f)
@@ -425,30 +430,11 @@ export default function App() {
     try {
       // Add the new filter to existing filters
       const allFilters = [
-        ...feature.filters.map(f => ({ filterType: f.filterType, parameters: f.parameters })),
+        ...feature.filters,
         { filterType: selectedFilterName, parameters: JSON.stringify(JSON.parse(newFilterParams)) }
       ]
 
-      const res = await fetch(`${API_BASE}/${feature.name}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          isEnabled: feature.isEnabled,
-          description: feature.description,
-          filters: allFilters
-        })
-      })
-
-      if (!res.ok) {
-        let errorMsg = `Failed to add filter (${res.status})`
-        if (res.status === 400) {
-          const text = await res.text()
-          const firstLine = text.split('\n')[0]
-          if (firstLine) errorMsg += `: ${firstLine}`
-        }
-        throw new Error(errorMsg)
-      }
-
+      const res = await putFeature(feature, { filters: allFilters }, 'Failed to add filter')
       const updated = await res.json()
       setFeatures(prev =>
         prev.map(f => f.name === feature.name ? updated : f)
@@ -543,10 +529,20 @@ export default function App() {
                     <option value={newFeatureApplication}>{newFeatureApplication}</option>
                   )}
                 </select>
+                <label htmlFor="featureDescription" className="modal-label" style={{ marginTop: '12px' }}>Description (optional)</label>
+                <input
+                  id="featureDescription"
+                  type="text"
+                  className="modal-input"
+                  placeholder="Enter description..."
+                  value={newFeatureDescription}
+                  onChange={(e) => setNewFeatureDescription(e.target.value)}
+                  disabled={creating}
+                />
               </div>
               <div className="modal-footer">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="modal-btn modal-btn-cancel"
                   onClick={() => setShowAddModal(false)}
                   disabled={creating}
@@ -761,12 +757,44 @@ export default function App() {
                           </span>
                         )}
                       </span>
-                      <span className="feature-description">{f.description}</span>
+                      {editingDescription?.featureName === f.name ? (
+                        <span className="description-edit" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            className="modal-input description-input"
+                            aria-label={`Description for ${f.name}`}
+                            value={editingDescription.value}
+                            onChange={(e) => setEditingDescription({ featureName: f.name, value: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.nativeEvent.isComposing) saveDescription()
+                              if (e.key === 'Escape') setEditingDescription(null)
+                            }}
+                            disabled={savingDescription}
+                            autoFocus
+                          />
+                          <button className="modal-btn modal-btn-primary" onClick={saveDescription} disabled={savingDescription || updating === f.name}>Save</button>
+                          <button className="modal-btn modal-btn-cancel" onClick={() => setEditingDescription(null)} disabled={savingDescription}>Cancel</button>
+                        </span>
+                      ) : (
+                        <span className="feature-description">
+                          {f.description}
+                          <button
+                            className="description-edit-btn"
+                            onClick={(e) => { e.stopPropagation(); setEditingDescription({ featureName: f.name, value: f.description ?? '' }); }}
+                            aria-label={`Edit description of ${f.name}`}
+                            title="Edit description"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+                            </svg>
+                          </button>
+                        </span>
+                      )}
                     </div>
                     <button
                       className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
                       onClick={(e) => { e.stopPropagation(); toggleFeature(f.name, f.isEnabled); }}
-                      disabled={updating === f.name}
+                      disabled={updating === f.name || (savingDescription && editingDescription?.featureName === f.name)}
                       aria-label={`Toggle ${f.name}`}
                     >
                       <span className="toggle-track">

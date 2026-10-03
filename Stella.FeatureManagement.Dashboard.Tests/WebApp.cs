@@ -15,7 +15,7 @@ public class WebApp : WebApplicationFactory<Program>, IAsyncLifetime
     public const string ApiBaseUrl = "features/dashboardapi";
 
     private readonly PostgreSqlContainer _postgresContainer = new PostgreSqlBuilder()
-        .WithImage("postgres:17-alpine")
+        .WithImage("postgres:18-alpine")
         .Build();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)

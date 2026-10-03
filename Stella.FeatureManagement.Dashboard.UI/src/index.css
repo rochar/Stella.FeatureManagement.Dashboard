@@ -824,6 +824,43 @@ h1 {
   line-height: 1.4;
 }
 
+.description-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.description-input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.description-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0;
+  vertical-align: middle;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.description-edit-btn:hover {
+  color: var(--color-text);
+}
+
+.description-edit-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
 .delete-btn {
   display: flex;
   align-items: center;

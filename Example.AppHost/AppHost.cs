@@ -3,7 +3,9 @@ var builder = DistributedApplication.CreateBuilder(args);
 // Add PostgreSQL with a database and pgAdmin
 var postgresPassword = builder.AddParameter("postgres-password", secret: true);
 
+// Keep WithImageTag before WithDataVolume: the volume mount path depends on the image tag (see docs/learnings).
 var postgres = builder.AddPostgres("postgres", password: postgresPassword)
+.WithImageTag("18")
 .WithLifetime(ContainerLifetime.Persistent)
 .WithHostPort(5432)
 .WithDataVolume()
