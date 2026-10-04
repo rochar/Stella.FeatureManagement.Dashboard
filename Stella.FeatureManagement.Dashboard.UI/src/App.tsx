@@ -37,16 +37,17 @@ const featureUrl = (name: string) => `${API_BASE}/${encodeURIComponent(name)}`
 // Throws with the server's first-line message on 400 (validation / OnFeatureChanging rejections).
 async function putFeature(
   feature: FeatureState,
-  changes: Partial<Pick<FeatureState, 'isEnabled' | 'description' | 'filters'>>,
+  changes: Partial<Pick<FeatureState, 'isEnabled' | 'description' | 'filters' | 'application'>>,
   failureMessage: string
 ): Promise<Response> {
-  const { isEnabled, description, filters } = { ...feature, ...changes }
+  const { isEnabled, description, filters, application } = { ...feature, ...changes }
   const res = await fetch(featureUrl(feature.name), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       isEnabled,
       description,
+      application,
       filters: filters.length > 0
         ? filters.map(f => ({ filterType: f.filterType, parameters: f.parameters }))
         : undefined
@@ -93,8 +94,8 @@ export default function App() {
   const [selectedApplication, setSelectedApplication] = useState<string | null>(null)
   const [newFeatureApplication, setNewFeatureApplication] = useState('Default')
   const [newFeatureDescription, setNewFeatureDescription] = useState('')
-  const [editingDescription, setEditingDescription] = useState<{ featureName: string; value: string } | null>(null)
-  const [savingDescription, setSavingDescription] = useState(false)
+  const [editTarget, setEditTarget] = useState<Pick<FeatureState, 'name' | 'application' | 'description' | 'isEnabled'> | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   const [showAddAppInput, setShowAddAppInput] = useState(false)
   const [newAppName, setNewAppName] = useState('')
 
@@ -214,36 +215,50 @@ export default function App() {
     }
   }, [newFeatureName, newFeatureApplication, newFeatureDescription, fetchApplications])
 
-  const saveDescription = useCallback(async () => {
-    if (!editingDescription) return
+  const isEditUnchanged = (() => {
+    if (!editTarget) return true
+    const feature = features.find(f => f.name === editTarget.name)
+    if (!feature) return true
+    return (editTarget.description?.trim() || null) === (feature.description?.trim() || null)
+      && editTarget.application === feature.application
+      && editTarget.isEnabled === feature.isEnabled
+  })()
+
+  const saveFeatureEdit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editTarget) return
     // A toggle PUT for the same feature is in flight: both PUTs replace the whole feature, so the last one wins.
-    if (updating === editingDescription.featureName) return
-    const feature = features.find(f => f.name === editingDescription.featureName)
+    if (updating === editTarget.name) return
+    const feature = features.find(f => f.name === editTarget.name)
     if (!feature) return
 
-    const description = editingDescription.value.trim() || null
-
     // Unchanged: skip the PUT, which would rewrite the filters, bump UpdatedAt and run OnFeatureChanging.
-    if (description === (feature.description?.trim() || null)) {
-      setEditingDescription(null)
+    if (isEditUnchanged) {
+      setEditTarget(null)
       return
     }
 
-    setSavingDescription(true)
+    setSavingEdit(true)
     setError(null)
 
     try {
-      await putFeature(feature, { description }, 'Failed to update description')
+      const res = await putFeature(feature, {
+        application: editTarget.application,
+        description: editTarget.description?.trim() || null,
+        isEnabled: editTarget.isEnabled
+      }, 'Failed to update feature')
+      const updated = await res.json()
 
-      setFeatures(prev => prev.map(f => f.name === feature.name ? { ...f, description } : f))
-      setEditingDescription(null)
+      setFeatures(prev => prev.map(f => f.name === feature.name ? updated : f))
+      setEditTarget(null)
       setLastUpdated(new Date())
+      fetchApplications()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update description')
+      setError(err instanceof Error ? err.message : 'Failed to update feature')
     } finally {
-      setSavingDescription(false)
+      setSavingEdit(false)
     }
-  }, [editingDescription, features, updating])
+  }, [editTarget, features, updating, isEditUnchanged, fetchApplications])
 
   const deleteFeature = useCallback(async () => {
     if (!deleteTarget) return
@@ -503,18 +518,7 @@ export default function App() {
             </div>
             <form onSubmit={createFeature}>
               <div className="modal-body">
-                <label htmlFor="featureName" className="modal-label">Feature Name</label>
-                <input
-                  id="featureName"
-                  type="text"
-                  className="modal-input"
-                  placeholder="Enter feature name..."
-                  value={newFeatureName}
-                  onChange={(e) => setNewFeatureName(e.target.value)}
-                  disabled={creating}
-                  autoFocus
-                />
-                <label htmlFor="featureApplication" className="modal-label" style={{ marginTop: '12px' }}>Application</label>
+                <label htmlFor="featureApplication" className="modal-label">Application</label>
                 <select
                   id="featureApplication"
                   className="modal-select"
@@ -529,6 +533,17 @@ export default function App() {
                     <option value={newFeatureApplication}>{newFeatureApplication}</option>
                   )}
                 </select>
+                <label htmlFor="featureName" className="modal-label" style={{ marginTop: '12px' }}>Feature Name</label>
+                <input
+                  id="featureName"
+                  type="text"
+                  className="modal-input"
+                  placeholder="Enter feature name..."
+                  value={newFeatureName}
+                  onChange={(e) => setNewFeatureName(e.target.value)}
+                  disabled={creating}
+                  autoFocus
+                />
                 <label htmlFor="featureDescription" className="modal-label" style={{ marginTop: '12px' }}>Description (optional)</label>
                 <input
                   id="featureDescription"
@@ -555,6 +570,88 @@ export default function App() {
                   disabled={creating || !newFeatureName.trim()}
                 >
                   {creating ? <span className="btn-loading"></span> : 'Add Feature'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Feature Modal */}
+      {editTarget && (
+        <div className="modal-overlay" onClick={() => !savingEdit && setEditTarget(null)}>
+          <div
+            className="modal"
+            onClick={e => e.stopPropagation()}
+            onKeyDown={(e) => { if (e.key === 'Escape' && !savingEdit) setEditTarget(null) }}
+          >
+            <div className="modal-header">
+              <h2>Edit Feature</h2>
+              <button className="modal-close" onClick={() => setEditTarget(null)} disabled={savingEdit}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={saveFeatureEdit}>
+              <div className="modal-body">
+                <p className="modal-subtitle">Editing <strong>{editTarget.name}</strong></p>
+                <label htmlFor="editFeatureApplication" className="modal-label">Application</label>
+                <select
+                  id="editFeatureApplication"
+                  className="modal-select"
+                  value={editTarget.application}
+                  onChange={(e) => setEditTarget({ ...editTarget, application: e.target.value })}
+                  disabled={savingEdit}
+                >
+                  {applications.map(app => (
+                    <option key={app} value={app}>{app}</option>
+                  ))}
+                  {!applications.includes(editTarget.application) && (
+                    <option value={editTarget.application}>{editTarget.application}</option>
+                  )}
+                </select>
+                <label htmlFor="editFeatureDescription" className="modal-label" style={{ marginTop: '12px' }}>Description (optional)</label>
+                <input
+                  id="editFeatureDescription"
+                  type="text"
+                  className="modal-input"
+                  placeholder="Enter description..."
+                  value={editTarget.description ?? ''}
+                  onChange={(e) => setEditTarget({ ...editTarget, description: e.target.value })}
+                  disabled={savingEdit}
+                  autoFocus
+                />
+                <span className="modal-label" style={{ marginTop: '12px' }}>State</span>
+                <button
+                  type="button"
+                  className={`toggle-switch ${editTarget.isEnabled ? 'enabled' : 'disabled'}`}
+                  onClick={() => setEditTarget({ ...editTarget, isEnabled: !editTarget.isEnabled })}
+                  disabled={savingEdit}
+                  aria-label={`Toggle ${editTarget.name}`}
+                  aria-pressed={editTarget.isEnabled}
+                >
+                  <span className="toggle-track">
+                    <span className="toggle-thumb"></span>
+                  </span>
+                  <span className="toggle-text">{editTarget.isEnabled ? 'Enabled' : 'Disabled'}</span>
+                </button>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="modal-btn modal-btn-cancel"
+                  onClick={() => setEditTarget(null)}
+                  disabled={savingEdit}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="modal-btn modal-btn-primary"
+                  disabled={savingEdit || isEditUnchanged || updating === editTarget.name}
+                >
+                  {savingEdit ? <span className="btn-loading"></span> : 'Save'}
                 </button>
               </div>
             </form>
@@ -745,6 +842,17 @@ export default function App() {
                         <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
                       </svg>
                     </button>
+                    <button
+                      className="edit-btn"
+                      onClick={(e) => { e.stopPropagation(); setEditTarget({ name: f.name, application: f.application, description: f.description, isEnabled: f.isEnabled }); }}
+                      aria-label={`Edit ${f.name}`}
+                      title="Edit feature"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </button>
                     <div className="feature-info">
                       <span className="feature-name">
                         {f.name}
@@ -757,44 +865,12 @@ export default function App() {
                           </span>
                         )}
                       </span>
-                      {editingDescription?.featureName === f.name ? (
-                        <span className="description-edit" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="text"
-                            className="modal-input description-input"
-                            aria-label={`Description for ${f.name}`}
-                            value={editingDescription.value}
-                            onChange={(e) => setEditingDescription({ featureName: f.name, value: e.target.value })}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !e.nativeEvent.isComposing) saveDescription()
-                              if (e.key === 'Escape') setEditingDescription(null)
-                            }}
-                            disabled={savingDescription}
-                            autoFocus
-                          />
-                          <button className="modal-btn modal-btn-primary" onClick={saveDescription} disabled={savingDescription || updating === f.name}>Save</button>
-                          <button className="modal-btn modal-btn-cancel" onClick={() => setEditingDescription(null)} disabled={savingDescription}>Cancel</button>
-                        </span>
-                      ) : (
-                        <span className="feature-description">
-                          {f.description}
-                          <button
-                            className="description-edit-btn"
-                            onClick={(e) => { e.stopPropagation(); setEditingDescription({ featureName: f.name, value: f.description ?? '' }); }}
-                            aria-label={`Edit description of ${f.name}`}
-                            title="Edit description"
-                          >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
-                            </svg>
-                          </button>
-                        </span>
-                      )}
+                      {f.description && <span className="feature-description">{f.description}</span>}
                     </div>
                     <button
                       className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
                       onClick={(e) => { e.stopPropagation(); toggleFeature(f.name, f.isEnabled); }}
-                      disabled={updating === f.name || (savingDescription && editingDescription?.featureName === f.name)}
+                      disabled={updating === f.name || (savingEdit && editTarget?.name === f.name)}
                       aria-label={`Toggle ${f.name}`}
                     >
                       <span className="toggle-track">

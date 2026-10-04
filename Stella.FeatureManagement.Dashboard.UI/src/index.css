@@ -824,43 +824,6 @@ h1 {
   line-height: 1.4;
 }
 
-.description-edit {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.description-input {
-  flex: 1 1 160px;
-  min-width: 0;
-}
-
-.description-edit-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  margin-left: 6px;
-  padding: 0;
-  vertical-align: middle;
-  background: transparent;
-  border: none;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-}
-
-.description-edit-btn:hover {
-  color: var(--color-text);
-}
-
-.description-edit-btn svg {
-  width: 14px;
-  height: 14px;
-}
-
 .delete-btn {
   display: flex;
   align-items: center;
@@ -877,7 +840,8 @@ h1 {
   flex-shrink: 0;
 }
 
-.feature-item:hover .delete-btn {
+.feature-item:hover .delete-btn,
+.feature-item:hover .edit-btn {
   opacity: 1;
 }
 
@@ -889,6 +853,33 @@ h1 {
 .delete-btn svg {
   width: 18px;
   height: 18px;
+}
+
+.edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: -10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  opacity: 0.35;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.edit-btn:hover {
+  background: var(--color-bg);
+  color: var(--color-primary);
+}
+
+.edit-btn svg {
+  width: 17px;
+  height: 17px;
 }
 
 /* Status Badge */

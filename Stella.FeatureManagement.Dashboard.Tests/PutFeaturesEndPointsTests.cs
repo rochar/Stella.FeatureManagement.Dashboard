@@ -82,6 +82,41 @@ public class PutFeaturesEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
     }
 
     [Fact]
+    public async Task WhenPutFeatureUpdatesApplication()
+    {
+        // Arrange
+        var featureName = $"FeatureToMove_{Guid.NewGuid():N}";
+        var createRequest = new { Name = featureName, IsEnabled = false, Application = "Default" };
+        var createResponse = await _client.PostAsJsonAsync($"{WebApp.ApiBaseUrl}/features", createRequest,
+            TestContext.Current.CancellationToken);
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var updateRequest = new { IsEnabled = true, Description = "Moved feature", Application = "Billing" };
+
+        // Act
+        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", updateRequest,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var result =
+            await response.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.IsEnabled.ShouldBeTrue();
+        result.Description.ShouldBe("Moved feature");
+        result.Application.ShouldBe("Billing");
+
+        // Verify the change persisted
+        var getResponse = await _client.GetAsync($"{WebApp.ApiBaseUrl}/features/{featureName}",
+            TestContext.Current.CancellationToken);
+        var verifyResult =
+            await getResponse.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        verifyResult.ShouldNotBeNull();
+        verifyResult.Application.ShouldBe("Billing");
+        verifyResult.Description.ShouldBe("Moved feature");
+    }
+
+    [Fact]
     public async Task WhenPutFeatureUpdatesStateWithInvalidFilterReturn400()
     {
         // Arrange 
