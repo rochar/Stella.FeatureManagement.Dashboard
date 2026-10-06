@@ -67,6 +67,8 @@ internal class FeatureFlagDbContext : DbContext
         {
             entity.ToTable("FeatureFlagUsages");
             entity.HasKey(e => new { e.FeatureFlagId, e.Date });
+            // The PK leads with FeatureFlagId; the all-features usage query ranges over Date alone.
+            entity.HasIndex(e => e.Date);
         });
     }
 }

@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { UsageChart, UsageModal, NoUsageIcon, totalUsage, type DailyUsage, type FeatureUsage } from './UsageChart'
 
 interface FeatureFilter {
   filterType: string
@@ -33,6 +34,12 @@ const APPLICATIONS_API_BASE = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/features/dashboardapi/applications` 
   : '../dashboardapi/applications'
 
+const USAGE_API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/features/dashboardapi/usage`
+  : '../dashboardapi/usage'
+
+const SPARK_DAYS = 7
+
 // One formatter for all rows: toLocaleString with options builds a new Intl.DateTimeFormat per call.
 const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 const formatDate = (iso: string) => dateFormatter.format(new Date(iso))
@@ -45,6 +52,30 @@ function FeatureTimestamps({ createdAt, updatedAt }: { createdAt: string; update
       Created {created}
       {updated && updated !== created && <> · Updated {updated}</>}
     </span>
+  )
+}
+
+// Last-7-days column chart in a feature row; a muted "no usage" marker when nothing was evaluated.
+// Either way it opens the 30-day modal, which may still have older data.
+function FeatureUsageSpark({ name, days, onOpen }: { name: string; days?: DailyUsage[]; onOpen: (name: string) => void }) {
+  const total = days ? totalUsage(days) : 0
+  return (
+    <button
+      className="usage-spark-btn"
+      onClick={(e) => { e.stopPropagation(); onOpen(name) }}
+      aria-label={total > 0
+        ? `Usage of ${name}: ${total} evaluations in the last ${SPARK_DAYS} days. Open 30-day usage`
+        : `No usage of ${name} in the last ${SPARK_DAYS} days. Open 30-day usage`}
+    >
+      {days && total > 0 ? (
+        <UsageChart days={days} variant="spark" />
+      ) : (
+        <span className="usage-none" title={`No usage in the last ${SPARK_DAYS} days`}>
+          <NoUsageIcon className="usage-none-icon" />
+          No usage · {SPARK_DAYS}d
+        </span>
+      )}
+    </button>
   )
 }
 
@@ -115,6 +146,11 @@ export default function App() {
   const [savingEdit, setSavingEdit] = useState(false)
   const [showAddAppInput, setShowAddAppInput] = useState(false)
   const [newAppName, setNewAppName] = useState('')
+  // null until loaded (or when loading failed): render no usage column rather than a false "no usage"
+  // A Map, not a plain object: a feature named e.g. "constructor" must not resolve to an Object.prototype member.
+  const [usage, setUsage] = useState<Map<string, DailyUsage[]> | null>(null)
+  const [usageTarget, setUsageTarget] = useState<string | null>(null)
+  const usageRequest = useRef(0)
 
   const fetchFeatures = useCallback(async () => {
     try {
@@ -153,6 +189,23 @@ export default function App() {
       console.error('Failed to fetch applications:', err)
     }
   }, [])
+
+  // Separate from fetchFeatures so the list never waits on usage; failures only hide the sparklines.
+  // Only the latest request may set state, so a slow earlier refresh can't overwrite newer data.
+  const fetchUsage = useCallback(async () => {
+    const request = ++usageRequest.current
+    try {
+      const res = await fetch(`${USAGE_API_BASE}?days=${SPARK_DAYS}`)
+      if (!res.ok) throw new Error(`Failed to fetch usage (${res.status})`)
+      const data: FeatureUsage[] = await res.json()
+      if (request === usageRequest.current) setUsage(new Map(data.map(u => [u.name, u.days])))
+    } catch (err) {
+      console.error('Failed to fetch usage:', err)
+      if (request === usageRequest.current) setUsage(null)
+    }
+  }, [])
+
+  const closeUsageModal = useCallback(() => setUsageTarget(null), [])
 
   const toggleFeature = useCallback(async (featureName: string, currentState: boolean) => {
     const newState = !currentState
@@ -500,7 +553,8 @@ export default function App() {
     fetchFeatures()
     fetchAvailableFilters()
     fetchApplications()
-  }, [fetchFeatures, fetchAvailableFilters, fetchApplications])
+    fetchUsage()
+  }, [fetchFeatures, fetchAvailableFilters, fetchApplications, fetchUsage])
 
   const filteredFeatures = features
     .filter(f => f.name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -529,7 +583,7 @@ export default function App() {
             </svg>
             <span>Feature</span>
           </button>
-          <button className="refresh-btn" onClick={fetchFeatures} disabled={loading} title="Refresh features">
+          <button className="refresh-btn" onClick={() => { fetchFeatures(); fetchUsage() }} disabled={loading} title="Refresh features">
             <svg className={`refresh-icon ${loading ? 'spinning' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
             </svg>
@@ -901,6 +955,7 @@ export default function App() {
                       {f.description && <span className="feature-description">{f.description}</span>}
                       {f.createdAt && <FeatureTimestamps createdAt={f.createdAt} updatedAt={f.updatedAt} />}
                     </div>
+                    {usage && <FeatureUsageSpark name={f.name} days={usage.get(f.name)} onOpen={setUsageTarget} />}
                     <button
                       className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
                       onClick={(e) => { e.stopPropagation(); toggleFeature(f.name, f.isEnabled); }}
@@ -1102,6 +1157,10 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {usageTarget && (
+        <UsageModal featureName={usageTarget} usageApiBase={USAGE_API_BASE} onClose={closeUsageModal} />
       )}
 
       {/* Add Filter Modal */}

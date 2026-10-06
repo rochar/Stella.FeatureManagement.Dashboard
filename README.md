@@ -99,6 +99,8 @@ GET /features/{featureName}
 GET /features/dashboardapi/features
 GET /features/dashboardapi/filters
 GET /features/dashboardapi/applications
+GET /features/dashboardapi/usage?days=7
+GET /features/dashboardapi/usage/{featureName}?days=30
 ```
 
 The `/features/{featureName}` endpoint returns a boolean feature state. The `/features/dashboardapi/*` endpoints are used by the dashboard UI for feature management.

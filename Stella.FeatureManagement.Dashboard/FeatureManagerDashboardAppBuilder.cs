@@ -19,6 +19,7 @@ internal class FeatureManagerDashboardAppBuilder(IEndpointRouteBuilder routeBuil
         var dashboardApiFilters = routeBuilder.MapGroup($"{group}/dashboardapi/filters");
         var dashboardApiFeatures = routeBuilder.MapGroup($"{group}/dashboardapi/features");
         var dashboardApiApplications = routeBuilder.MapGroup($"{group}/dashboardapi/applications");
+        var dashboardApiUsage = routeBuilder.MapGroup($"{group}/dashboardapi/usage");
 
         if (configureCors is not null)
         {
@@ -26,6 +27,7 @@ internal class FeatureManagerDashboardAppBuilder(IEndpointRouteBuilder routeBuil
             dashboardApiFilters.RequireCors(configureCors);
             dashboardApiFeatures.RequireCors(configureCors);
             dashboardApiApplications.RequireCors(configureCors);
+            dashboardApiUsage.RequireCors(configureCors);
             featuresGroup.RequireCors(configureCors);
         }
 
@@ -45,6 +47,8 @@ internal class FeatureManagerDashboardAppBuilder(IEndpointRouteBuilder routeBuil
             .MapDeleteFeatures();
         dashboardApiApplications
             .MapGetApplications();
+        dashboardApiUsage
+            .MapGetUsage();
 
         featuresGroup
             .MapGetFeaturesFromFeatureManager();
