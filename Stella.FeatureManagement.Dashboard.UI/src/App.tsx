@@ -1,1279 +1,331 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { UsageChart, UsageModal, NoUsageIcon, totalUsage, type DailyUsage, type FeatureUsage } from './UsageChart'
+import { useCallback, useId, useState } from 'react'
+import { errorMessage, type FeatureState } from './api'
+import { AddFilterDialog } from './components/AddFilterDialog'
+import { Button, IconButton } from './components/Button'
+import { ConfirmDialog } from './components/Dialog'
+import { FeatureFormDialog } from './components/FeatureFormDialog'
+import { FeatureRow } from './components/FeatureRow'
+import { Icon } from './components/Icon'
+import { Sidebar } from './components/Sidebar'
+import { ToastProvider, useToast } from './components/Toast'
+import { useFeatures, SPARK_DAYS } from './hooks/useFeatures'
+import { useTheme, type ThemePreference } from './hooks/useTheme'
+import { UsageModal } from './UsageChart'
 
-interface FeatureFilter {
-  filterType: string
-  parameters: string | null
-}
-
-interface FeatureState {
-  name: string
-  isEnabled: boolean
-  description: string | null
-  filters: FeatureFilter[]
-  application: string
-  createdAt?: string | null
-  updatedAt?: string | null
-}
-
-interface AvailableFilter {
-  name: string
-  defaultSettings: string
-}
-
-// API base path - use VITE_API_URL if available (Aspire), otherwise fall back to relative path
-const API_BASE = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL}/features/dashboardapi/features` 
-  : '../dashboardapi/features'
-
-const FILTERS_API_BASE = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL}/features/dashboardapi/filters` 
-  : '../dashboardapi/filters'
-
-const APPLICATIONS_API_BASE = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL}/features/dashboardapi/applications` 
-  : '../dashboardapi/applications'
-
-const USAGE_API_BASE = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/features/dashboardapi/usage`
-  : '../dashboardapi/usage'
-
-const SPARK_DAYS = 7
-
-// One formatter for all rows: toLocaleString with options builds a new Intl.DateTimeFormat per call.
-const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-const formatDate = (iso: string) => dateFormatter.format(new Date(iso))
-
-const relativeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ['year', 31_536_000], ['month', 2_592_000], ['week', 604_800], ['day', 86_400], ['hour', 3_600], ['minute', 60],
-]
-function formatRelative(iso: string) {
-  const seconds = (new Date(iso).getTime() - Date.now()) / 1000
-  for (const [unit, size] of RELATIVE_UNITS) {
-    if (Math.abs(seconds) >= size) return relativeFormatter.format(Math.round(seconds / size), unit)
-  }
-  return 'just now'
-}
-
-// Edits within a minute of creation count as "never updated" (the create round-trip can stamp both).
-const wasUpdated = (createdAt: string, updatedAt?: string | null): updatedAt is string =>
-  !!updatedAt && new Date(updatedAt).getTime() - new Date(createdAt).getTime() > 60_000
-
-// Compact "last activity" column in a feature row: one relative time, absolute dates on hover.
-function FeatureActivity({ createdAt, updatedAt }: { createdAt: string; updatedAt?: string | null }) {
-  const updated = wasUpdated(createdAt, updatedAt)
-  const when = updated ? updatedAt : createdAt
-  const title = `Created ${formatDate(createdAt)}${updated ? `\nLast updated ${formatDate(updatedAt)}` : ''}`
-  return (
-    <span className="feature-activity" title={title}>
-      <span className="feature-activity-label">{updated ? 'Updated' : 'Created'}</span>
-      <time className="feature-activity-value" dateTime={when}>{formatRelative(when)}</time>
-    </span>
-  )
-}
-
-// Full, absolute dates at the bottom of the expanded panel (tooltips don't work on touch).
-function FeatureDates({ createdAt, updatedAt }: { createdAt: string; updatedAt?: string | null }) {
-  return (
-    <dl className="feature-dates">
-      <div><dt>Created</dt><dd><time dateTime={createdAt}>{formatDate(createdAt)}</time></dd></div>
-      {wasUpdated(createdAt, updatedAt) && (
-        <div><dt>Last updated</dt><dd><time dateTime={updatedAt}>{formatDate(updatedAt)}</time></dd></div>
-      )}
-    </dl>
-  )
-}
-
-// Last-7-days column chart in a feature row; a muted "no usage" marker when nothing was evaluated.
-// Either way it opens the 30-day modal, which may still have older data.
-function FeatureUsageSpark({ name, days, onOpen }: { name: string; days?: DailyUsage[]; onOpen: (name: string) => void }) {
-  const total = days ? totalUsage(days) : 0
-  return (
-    <button
-      className="usage-spark-btn"
-      onClick={(e) => { e.stopPropagation(); onOpen(name) }}
-      aria-label={total > 0
-        ? `Usage of ${name}: ${total} evaluations in the last ${SPARK_DAYS} days. Open 30-day usage`
-        : `No usage of ${name} in the last ${SPARK_DAYS} days. Open 30-day usage`}
-    >
-      {days && total > 0 ? (
-        <UsageChart days={days} variant="spark" />
-      ) : (
-        <span className="usage-none" title={`No usage in the last ${SPARK_DAYS} days`}>
-          <NoUsageIcon className="usage-none-icon" />
-          No usage · {SPARK_DAYS}d
-        </span>
-      )}
-    </button>
-  )
-}
-
-const featureUrl = (name: string) => `${API_BASE}/${encodeURIComponent(name)}`
-
-// The PUT endpoint replaces the whole feature, so send the current state with `changes` applied on top.
-// Throws with the server's first-line message on 400 (validation / OnFeatureChanging rejections).
-async function putFeature(
-  feature: FeatureState,
-  changes: Partial<Pick<FeatureState, 'isEnabled' | 'description' | 'filters' | 'application'>>,
-  failureMessage: string
-): Promise<Response> {
-  const { isEnabled, description, filters, application } = { ...feature, ...changes }
-  const res = await fetch(featureUrl(feature.name), {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      isEnabled,
-      description,
-      application,
-      filters: filters.length > 0
-        ? filters.map(f => ({ filterType: f.filterType, parameters: f.parameters }))
-        : undefined
-    })
-  })
-
-  if (!res.ok) {
-    let errorMsg = `${failureMessage} (${res.status})`
-    if (res.status === 400) {
-      const firstLine = (await res.text()).split('\n')[0]
-      if (firstLine) errorMsg += `: ${firstLine}`
-    }
-    throw new Error(errorMsg)
-  }
-  return res
-}
+type FeatureDialog =
+  | { kind: 'create' }
+  | { kind: 'edit'; name: string }
+  | { kind: 'delete'; name: string }
+  | { kind: 'addFilter'; name: string }
+  | { kind: 'deleteFilter'; name: string; index: number; filterType: string }
+  | { kind: 'usage'; name: string }
 
 export default function App() {
-  const [features, setFeatures] = useState<FeatureState[]>([])
-  const [loading, setLoading] = useState(true)
-  const [updating, setUpdating] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const [newFeatureName, setNewFeatureName] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState(false)
-  const [expandedFeature, setExpandedFeature] = useState<string | null>(null)
-  const [editingFilter, setEditingFilter] = useState<{ featureName: string; filterIndex: number } | null>(null)
-  const [editedParams, setEditedParams] = useState('')
-  const [jsonError, setJsonError] = useState<string | null>(null)
-  const [savingFilter, setSavingFilter] = useState(false)
-  const [deleteFilterTarget, setDeleteFilterTarget] = useState<{ featureName: string; filterIndex: number; filterType: string } | null>(null)
-  const [deletingFilterInProgress, setDeletingFilterInProgress] = useState(false)
-  const [availableFilters, setAvailableFilters] = useState<AvailableFilter[]>([])
-  const [addFilterTarget, setAddFilterTarget] = useState<string | null>(null)
-  const [selectedFilterName, setSelectedFilterName] = useState<string>('')
-  const [newFilterParams, setNewFilterParams] = useState('')
-  const [newFilterJsonError, setNewFilterJsonError] = useState<string | null>(null)
-  const [addingFilter, setAddingFilter] = useState(false)
-  const [applications, setApplications] = useState<string[]>([])
+  return (
+    <ToastProvider>
+      <Dashboard />
+    </ToastProvider>
+  )
+}
+
+function Dashboard() {
+  const store = useFeatures()
+  const toast = useToast()
+  const { theme, cycleTheme } = useTheme()
+  const searchId = useId()
+  const [search, setSearch] = useState('')
   const [selectedApplication, setSelectedApplication] = useState<string | null>(null)
-  const [newFeatureApplication, setNewFeatureApplication] = useState('Default')
-  const [newFeatureDescription, setNewFeatureDescription] = useState('')
-  const [editTarget, setEditTarget] = useState<Pick<FeatureState, 'name' | 'application' | 'description' | 'isEnabled'> | null>(null)
-  const [savingEdit, setSavingEdit] = useState(false)
-  const [showAddAppInput, setShowAddAppInput] = useState(false)
-  const [newAppName, setNewAppName] = useState('')
-  // null until loaded (or when loading failed): render no usage column rather than a false "no usage"
-  // A Map, not a plain object: a feature named e.g. "constructor" must not resolve to an Object.prototype member.
-  const [usage, setUsage] = useState<Map<string, DailyUsage[]> | null>(null)
-  const [usageTarget, setUsageTarget] = useState<string | null>(null)
-  const usageRequest = useRef(0)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [dialog, setDialog] = useState<FeatureDialog | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  const fetchFeatures = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const res = await fetch(API_BASE)
-      if (!res.ok) throw new Error(`Failed to fetch features (${res.status})`)
-      const data = await res.json()
-      setFeatures(data)
-      setLastUpdated(new Date())
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const closeDialog = useCallback(() => { setDialog(null); setDeleteError(null) }, [])
+  const findFeature = (name: string) => store.features.find(f => f.name === name)
 
-  const fetchAvailableFilters = useCallback(async () => {
-    try {
-      const res = await fetch(FILTERS_API_BASE)
-      if (!res.ok) throw new Error(`Failed to fetch filters (${res.status})`)
-      const data = await res.json()
-      setAvailableFilters(data)
-    } catch (err) {
-      console.error('Failed to fetch available filters:', err)
-    }
-  }, [])
+  const scoped = store.features.filter(f => selectedApplication === null || f.application === selectedApplication)
+  const term = search.trim().toLowerCase()
+  const visible = scoped
+    .filter(f => !term || f.name.toLowerCase().includes(term) || f.description?.toLowerCase().includes(term))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  const enabledCount = scoped.filter(f => f.isEnabled).length
 
-  const fetchApplications = useCallback(async () => {
-    try {
-      const res = await fetch(APPLICATIONS_API_BASE)
-      if (!res.ok) throw new Error(`Failed to fetch applications (${res.status})`)
-      const data = await res.json()
-      setApplications(data)
-    } catch (err) {
-      console.error('Failed to fetch applications:', err)
-    }
-  }, [])
-
-  // Separate from fetchFeatures so the list never waits on usage; failures only hide the sparklines.
-  // Only the latest request may set state, so a slow earlier refresh can't overwrite newer data.
-  const fetchUsage = useCallback(async () => {
-    const request = ++usageRequest.current
-    try {
-      const res = await fetch(`${USAGE_API_BASE}?days=${SPARK_DAYS}`)
-      if (!res.ok) throw new Error(`Failed to fetch usage (${res.status})`)
-      const data: FeatureUsage[] = await res.json()
-      if (request === usageRequest.current) setUsage(new Map(data.map(u => [u.name, u.days])))
-    } catch (err) {
-      console.error('Failed to fetch usage:', err)
-      if (request === usageRequest.current) setUsage(null)
-    }
-  }, [])
-
-  const closeUsageModal = useCallback(() => setUsageTarget(null), [])
-
-  const toggleFeature = useCallback(async (featureName: string, currentState: boolean) => {
-    const newState = !currentState
-    setUpdating(featureName)
-    
-    const feature = features.find(f => f.name === featureName)
-    if (!feature) return
-    
-    // Optimistic update
-    setFeatures(prev =>
-      prev.map(f =>
-        f.name === featureName
-          ? { ...f, isEnabled: newState }
-          : f
-      )
-    )
-
-    try {
-      const res = await putFeature(feature, { isEnabled: newState }, 'Failed to update feature')
-      // Use the server's copy so the refreshed updatedAt is shown
-      const updated = await res.json()
-      setFeatures(prev => prev.map(f => f.name === featureName ? updated : f))
-
-      setLastUpdated(new Date())
-    } catch (err) {
-      // Revert on error
-      setFeatures(prev =>
-        prev.map(f =>
-          f.name === featureName
-            ? { ...f, isEnabled: currentState }
-            : f
-        )
-      )
-      setError(err instanceof Error ? err.message : 'Failed to update feature')
-    } finally {
-      setUpdating(null)
-    }
-  }, [features])
-
-  const createFeature = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    const featureName = newFeatureName.trim()
-    if (!featureName) return
-
-    setCreating(true)
-    setError(null)
-
-    try {
-      const res = await fetch(API_BASE, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: featureName,
-          isEnabled: false,
-          description: newFeatureDescription.trim() || null,
-          application: newFeatureApplication
-        })
-      })
-
-      if (res.status === 409) {
-        throw new Error(`Feature '${featureName}' already exists`)
-      }
-
-      if (!res.ok) {
-        throw new Error(`Failed to create feature (${res.status})`)
-      }
-
-      const created = await res.json()
-      setFeatures(prev => [...prev, created])
-      setNewFeatureName('')
-      setNewFeatureApplication('Default')
-      setNewFeatureDescription('')
-      setShowAddModal(false)
-      setLastUpdated(new Date())
-      fetchApplications()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create feature')
-    } finally {
-      setCreating(false)
-    }
-  }, [newFeatureName, newFeatureApplication, newFeatureDescription, fetchApplications])
-
-  const isEditUnchanged = (() => {
-    if (!editTarget) return true
-    const feature = features.find(f => f.name === editTarget.name)
-    if (!feature) return true
-    return (editTarget.description?.trim() || null) === (feature.description?.trim() || null)
-      && editTarget.application === feature.application
-      && editTarget.isEnabled === feature.isEnabled
-  })()
-
-  const saveFeatureEdit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editTarget) return
-    // A toggle PUT for the same feature is in flight: both PUTs replace the whole feature, so the last one wins.
-    if (updating === editTarget.name) return
-    const feature = features.find(f => f.name === editTarget.name)
-    if (!feature) return
-
-    // Unchanged: skip the PUT, which would rewrite the filters, bump UpdatedAt and run OnFeatureChanging.
-    if (isEditUnchanged) {
-      setEditTarget(null)
-      return
-    }
-
-    setSavingEdit(true)
-    setError(null)
-
-    try {
-      const res = await putFeature(feature, {
-        application: editTarget.application,
-        description: editTarget.description?.trim() || null,
-        isEnabled: editTarget.isEnabled
-      }, 'Failed to update feature')
-      const updated = await res.json()
-
-      setFeatures(prev => prev.map(f => f.name === feature.name ? updated : f))
-      setEditTarget(null)
-      setLastUpdated(new Date())
-      fetchApplications()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update feature')
-    } finally {
-      setSavingEdit(false)
-    }
-  }, [editTarget, features, updating, isEditUnchanged, fetchApplications])
-
-  const deleteFeature = useCallback(async () => {
-    if (!deleteTarget) return
-
+  const runDelete = async (action: () => Promise<unknown>, success: string, failure: string) => {
     setDeleting(true)
-    setError(null)
-
+    setDeleteError(null)
     try {
-      const res = await fetch(featureUrl(deleteTarget), {
-        method: 'DELETE'
-      })
-
-      if (!res.ok) {
-        throw new Error(`Failed to delete feature (${res.status})`)
-      }
-
-      setFeatures(prev => prev.filter(f => f.name !== deleteTarget))
-      setDeleteTarget(null)
-      setLastUpdated(new Date())
-      fetchApplications()
+      await action()
+      toast.success(success)
+      closeDialog()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete feature')
+      setDeleteError(errorMessage(err, failure))
     } finally {
       setDeleting(false)
     }
-  }, [deleteTarget])
+  }
 
-  const startEditingFilter = useCallback((featureName: string, filterIndex: number, currentParams: string | null) => {
-    setEditingFilter({ featureName, filterIndex })
-    setEditedParams(currentParams ? JSON.stringify(JSON.parse(currentParams), null, 2) : '{}')
-    setJsonError(null)
-  }, [])
+  const confirmDeleteFeature = (name: string) => runDelete(
+    async () => {
+      await store.deleteFeature(name)
+      if (expanded === name) setExpanded(null)
+    },
+    `Feature “${name}” deleted`,
+    'Failed to delete feature'
+  )
 
-  const cancelEditingFilter = useCallback(() => {
-    setEditingFilter(null)
-    setEditedParams('')
-    setJsonError(null)
-  }, [])
+  const confirmDeleteFilter = (name: string, index: number, filterType: string) => runDelete(
+    async () => {
+      const feature = findFeature(name)
+      // Don't report success for a removal that never happened.
+      if (feature?.filters[index]?.filterType !== filterType) throw new Error('This filter no longer exists. Refresh and try again.')
+      await store.updateFeature(feature, { filters: feature.filters.filter((_, i) => i !== index) }, 'Failed to remove filter')
+    },
+    `${filterType} filter removed from “${name}”`,
+    'Failed to remove filter'
+  )
 
-  const validateJson = useCallback((value: string): boolean => {
-    try {
-      JSON.parse(value)
-      setJsonError(null)
-      return true
-    } catch {
-      setJsonError('Invalid JSON format')
-      return false
-    }
-  }, [])
-
-  const handleParamsChange = useCallback((value: string) => {
-    setEditedParams(value)
-    if (value.trim()) {
-      validateJson(value)
-    } else {
-      setJsonError(null)
-    }
-  }, [validateJson])
-
-  const saveFilterParams = useCallback(async () => {
-    if (!editingFilter) return
-    if (!validateJson(editedParams)) return
-
-    const feature = features.find(f => f.name === editingFilter.featureName)
-    if (!feature) return
-
-    const filter = feature.filters[editingFilter.filterIndex]
-    if (!filter) return
-
-    // Unchanged: skip the PUT, which would bump UpdatedAt and run OnFeatureChanging (same as saveFeatureEdit).
-    const newParams = JSON.stringify(JSON.parse(editedParams))
-    let currentParams: string | null = null
-    try {
-      currentParams = filter.parameters ? JSON.stringify(JSON.parse(filter.parameters)) : null
-    } catch {
-      // Stored parameters are not valid JSON: treat as changed
-    }
-    if (newParams === currentParams) {
-      cancelEditingFilter()
-      return
-    }
-
-    setSavingFilter(true)
-    setError(null)
-
-    try {
-      // Update the specific filter and keep the rest
-      const updatedFilters = feature.filters.map((f, idx) =>
-        idx === editingFilter.filterIndex
-          ? { filterType: f.filterType, parameters: newParams }
-          : f
-      )
-
-      const res = await putFeature(feature, { filters: updatedFilters }, 'Failed to update filter')
-      const updated = await res.json()
-      setFeatures(prev =>
-        prev.map(f => f.name === feature.name ? updated : f)
-      )
-      setEditingFilter(null)
-      setEditedParams('')
-      setLastUpdated(new Date())
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update filter')
-    } finally {
-      setSavingFilter(false)
-    }
-  }, [editingFilter, editedParams, features, validateJson, cancelEditingFilter])
-
-  const deleteFilter = useCallback(async () => {
-    if (!deleteFilterTarget) return
-
-    const feature = features.find(f => f.name === deleteFilterTarget.featureName)
-    if (!feature) return
-
-    setDeletingFilterInProgress(true)
-    setError(null)
-
-    try {
-      // Remove the specific filter and keep the rest
-      const remainingFilters = feature.filters.filter((_, idx) => idx !== deleteFilterTarget.filterIndex)
-
-      const res = await putFeature(feature, { filters: remainingFilters }, 'Failed to delete filter')
-      const updated = await res.json()
-      setFeatures(prev =>
-        prev.map(f => f.name === feature.name ? updated : f)
-      )
-      setDeleteFilterTarget(null)
-      setLastUpdated(new Date())
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete filter')
-    } finally {
-      setDeletingFilterInProgress(false)
-    }
-  }, [deleteFilterTarget, features])
-
-  const openAddFilterModal = useCallback((featureName: string) => {
-    setAddFilterTarget(featureName)
-    setSelectedFilterName('')
-    setNewFilterParams('')
-    setNewFilterJsonError(null)
-  }, [])
-
-  const closeAddFilterModal = useCallback(() => {
-    setAddFilterTarget(null)
-    setSelectedFilterName('')
-    setNewFilterParams('')
-    setNewFilterJsonError(null)
-  }, [])
-
-  const handleFilterSelectionChange = useCallback((filterName: string) => {
-    setSelectedFilterName(filterName)
-    const filter = availableFilters.find(f => f.name === filterName)
-    if (filter) {
-      try {
-        const formatted = JSON.stringify(JSON.parse(filter.defaultSettings), null, 2)
-        setNewFilterParams(formatted)
-        setNewFilterJsonError(null)
-      } catch {
-        setNewFilterParams(filter.defaultSettings)
-      }
-    } else {
-      setNewFilterParams('')
-    }
-  }, [availableFilters])
-
-  const handleNewFilterParamsChange = useCallback((value: string) => {
-    setNewFilterParams(value)
-    if (value.trim()) {
-      try {
-        JSON.parse(value)
-        setNewFilterJsonError(null)
-      } catch {
-        setNewFilterJsonError('Invalid JSON format')
-      }
-    } else {
-      setNewFilterJsonError(null)
-    }
-  }, [])
-
-  const addFilterToFeature = useCallback(async () => {
-    if (!addFilterTarget || !selectedFilterName) return
-    
-    // Validate JSON
-    try {
-      JSON.parse(newFilterParams)
-    } catch {
-      setNewFilterJsonError('Invalid JSON format')
-      return
-    }
-
-    const feature = features.find(f => f.name === addFilterTarget)
-    if (!feature) return
-
-    setAddingFilter(true)
-    setError(null)
-
-    try {
-      // Add the new filter to existing filters
-      const allFilters = [
-        ...feature.filters,
-        { filterType: selectedFilterName, parameters: JSON.stringify(JSON.parse(newFilterParams)) }
-      ]
-
-      const res = await putFeature(feature, { filters: allFilters }, 'Failed to add filter')
-      const updated = await res.json()
-      setFeatures(prev =>
-        prev.map(f => f.name === feature.name ? updated : f)
-      )
-      closeAddFilterModal()
-      setLastUpdated(new Date())
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add filter')
-    } finally {
-      setAddingFilter(false)
-    }
-  }, [addFilterTarget, selectedFilterName, newFilterParams, features, closeAddFilterModal])
-
-  useEffect(() => {
-    fetchFeatures()
-    fetchAvailableFilters()
-    fetchApplications()
-    fetchUsage()
-  }, [fetchFeatures, fetchAvailableFilters, fetchApplications, fetchUsage])
-
-  const filteredFeatures = features
-    .filter(f => f.name.toLowerCase().includes(searchTerm.toLowerCase()))
-    .filter(f => selectedApplication === null || f.application === selectedApplication)
-    .sort((a, b) => a.name.localeCompare(b.name))
-
-  const enabledCount = features.filter(f => f.isEnabled).length
-  const disabledCount = features.length - enabledCount
+  const dialogFeature = dialog && dialog.kind !== 'create' ? findFeature(dialog.name) : undefined
 
   return (
-    <div className="container">
-      <header className="header">
-        <div className="header-content">
-          <div className="header-title">
-            <svg className="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
-            <h1>Feature Management</h1>
+    <>
+      <header className="topbar">
+        <div className="topbar-inner">
+          <div className="brand">
+            <span className="brand-mark"><Icon name="flag" /></span>
+            <div className="brand-text">
+              <p className="brand-title">Feature Management</p>
+              <p className="brand-subtitle">Manage and monitor feature flags</p>
+            </div>
           </div>
-          <p className="header-subtitle">Monitor and track feature flags in your application</p>
-        </div>
-        <div className="header-actions">
-          <button className="add-btn" onClick={() => { setNewFeatureApplication(selectedApplication ?? 'Default'); setShowAddModal(true); }} title="Add new feature">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            <span>Feature</span>
-          </button>
-          <button className="refresh-btn" onClick={() => { fetchFeatures(); fetchUsage() }} disabled={loading} title="Refresh features">
-            <svg className={`refresh-icon ${loading ? 'spinning' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-            </svg>
-          </button>
+          <div className="topbar-actions">
+            <ThemeButton theme={theme} onClick={cycleTheme} />
+            <IconButton
+              icon="refresh"
+              label="Refresh"
+              bordered
+              onClick={store.refresh}
+              disabled={store.refreshing}
+              iconClassName={store.refreshing ? 'spin' : undefined}
+            />
+            <Button variant="primary" icon="plus" onClick={() => setDialog({ kind: 'create' })}>
+              <span>New<span className="btn-label-wide"> feature</span></span>
+            </Button>
+          </div>
         </div>
       </header>
 
-      {/* Add Feature Modal */}
-      {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Add New Feature</h2>
-              <button className="modal-close" onClick={() => setShowAddModal(false)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <form onSubmit={createFeature}>
-              <div className="modal-body">
-                <label htmlFor="featureApplication" className="modal-label">Application</label>
-                <select
-                  id="featureApplication"
-                  className="modal-select"
-                  value={newFeatureApplication}
-                  onChange={(e) => setNewFeatureApplication(e.target.value)}
-                  disabled={creating}
-                >
-                  {applications.map(app => (
-                    <option key={app} value={app}>{app}</option>
-                  ))}
-                  {!applications.includes(newFeatureApplication) && (
-                    <option value={newFeatureApplication}>{newFeatureApplication}</option>
-                  )}
-                </select>
-                <label htmlFor="featureName" className="modal-label" style={{ marginTop: '12px' }}>Feature Name</label>
-                <input
-                  id="featureName"
-                  type="text"
-                  className="modal-input"
-                  placeholder="Enter feature name..."
-                  value={newFeatureName}
-                  onChange={(e) => setNewFeatureName(e.target.value)}
-                  disabled={creating}
-                  autoFocus
-                />
-                <label htmlFor="featureDescription" className="modal-label" style={{ marginTop: '12px' }}>Description (optional)</label>
-                <input
-                  id="featureDescription"
-                  type="text"
-                  className="modal-input"
-                  placeholder="Enter description..."
-                  value={newFeatureDescription}
-                  onChange={(e) => setNewFeatureDescription(e.target.value)}
-                  disabled={creating}
-                />
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="modal-btn modal-btn-cancel"
-                  onClick={() => setShowAddModal(false)}
-                  disabled={creating}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  className="modal-btn modal-btn-primary"
-                  disabled={creating || !newFeatureName.trim()}
-                >
-                  {creating ? <span className="btn-loading"></span> : 'Add Feature'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Feature Modal */}
-      {editTarget && (
-        <div className="modal-overlay" onClick={() => !savingEdit && setEditTarget(null)}>
-          <div
-            className="modal"
-            onClick={e => e.stopPropagation()}
-            onKeyDown={(e) => { if (e.key === 'Escape' && !savingEdit) setEditTarget(null) }}
-          >
-            <div className="modal-header">
-              <h2>Edit Feature</h2>
-              <button className="modal-close" onClick={() => setEditTarget(null)} disabled={savingEdit}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <form onSubmit={saveFeatureEdit}>
-              <div className="modal-body">
-                <p className="modal-subtitle">Editing <strong>{editTarget.name}</strong></p>
-                <label htmlFor="editFeatureApplication" className="modal-label">Application</label>
-                <select
-                  id="editFeatureApplication"
-                  className="modal-select"
-                  value={editTarget.application}
-                  onChange={(e) => setEditTarget({ ...editTarget, application: e.target.value })}
-                  disabled={savingEdit}
-                >
-                  {applications.map(app => (
-                    <option key={app} value={app}>{app}</option>
-                  ))}
-                  {!applications.includes(editTarget.application) && (
-                    <option value={editTarget.application}>{editTarget.application}</option>
-                  )}
-                </select>
-                <label htmlFor="editFeatureDescription" className="modal-label" style={{ marginTop: '12px' }}>Description (optional)</label>
-                <input
-                  id="editFeatureDescription"
-                  type="text"
-                  className="modal-input"
-                  placeholder="Enter description..."
-                  value={editTarget.description ?? ''}
-                  onChange={(e) => setEditTarget({ ...editTarget, description: e.target.value })}
-                  disabled={savingEdit}
-                  autoFocus
-                />
-                <span className="modal-label" style={{ marginTop: '12px' }}>State</span>
-                <button
-                  type="button"
-                  className={`toggle-switch ${editTarget.isEnabled ? 'enabled' : 'disabled'}`}
-                  onClick={() => setEditTarget({ ...editTarget, isEnabled: !editTarget.isEnabled })}
-                  disabled={savingEdit}
-                  aria-label={`Toggle ${editTarget.name}`}
-                  aria-pressed={editTarget.isEnabled}
-                >
-                  <span className="toggle-track">
-                    <span className="toggle-thumb"></span>
-                  </span>
-                  <span className="toggle-text">{editTarget.isEnabled ? 'Enabled' : 'Disabled'}</span>
-                </button>
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="modal-btn modal-btn-cancel"
-                  onClick={() => setEditTarget(null)}
-                  disabled={savingEdit}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="modal-btn modal-btn-primary"
-                  disabled={savingEdit || isEditUnchanged || updating === editTarget.name}
-                >
-                  {savingEdit ? <span className="btn-loading"></span> : 'Save'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Layout with Sidebar */}
-      <div className="dashboard-layout">
-        {/* Application Sidebar */}
-        <aside className="app-sidebar">
-          <div className="sidebar-header">
-            <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
-            </svg>
-            <span>Applications</span>
-          </div>
-          <ul className="sidebar-list">
-            <li>
-              <button
-                className={`sidebar-item ${selectedApplication === null ? 'active' : ''}`}
-                onClick={() => setSelectedApplication(null)}
-              >
-                <span className="sidebar-item-name">All</span>
-                <span className="sidebar-item-count">{features.length}</span>
-              </button>
-            </li>
-            {applications.map(app => {
-              const count = features.filter(f => f.application === app).length
-              return (
-                <li key={app}>
-                  <button
-                    className={`sidebar-item ${selectedApplication === app ? 'active' : ''}`}
-                    onClick={() => setSelectedApplication(app)}
-                  >
-                    <span className="sidebar-item-name">{app}</span>
-                    <span className="sidebar-item-count">{count}</span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-          <div className="sidebar-add-app">
-            {showAddAppInput ? (
-              <form className="sidebar-add-form" onSubmit={(e) => {
-                e.preventDefault()
-                const name = newAppName.trim()
-                if (name && !applications.includes(name)) {
-                  setApplications(prev => [...prev, name].sort())
-                  setNewAppName('')
-                  setShowAddAppInput(false)
-                  setSelectedApplication(name)
-                }
-              }}>
-                <input
-                  className="sidebar-add-input"
-                  type="text"
-                  placeholder="Application name..."
-                  value={newAppName}
-                  onChange={(e) => setNewAppName(e.target.value)}
-                  autoFocus
-                />
-                <div className="sidebar-add-actions">
-                  <button type="submit" className="sidebar-add-confirm" disabled={!newAppName.trim() || applications.includes(newAppName.trim())}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" /></svg>
-                  </button>
-                  <button type="button" className="sidebar-add-cancel" onClick={() => { setShowAddAppInput(false); setNewAppName('') }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <button className="sidebar-add-btn" onClick={() => setShowAddAppInput(true)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                Add Application
-              </button>
-            )}
-          </div>
-        </aside>
-
-        {/* Main Content */}
-        <div className="dashboard-content">
-      {/* Stats Cards */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-value">{features.length}</div>
-          <div className="stat-label">Total Features</div>
-        </div>
-        <div className="stat-card stat-enabled">
-          <div className="stat-value">{enabledCount}</div>
-          <div className="stat-label">Enabled</div>
-        </div>
-        <div className="stat-card stat-disabled">
-          <div className="stat-value">{disabledCount}</div>
-          <div className="stat-label">Disabled</div>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="search-container">
-        <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="11" cy="11" r="8" />
-          <path d="M21 21l-4.35-4.35" />
-        </svg>
-        <input
-          type="text"
-          className="search-input"
-          placeholder="Search features..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+      <div className="page">
+        <Sidebar
+          applications={store.applications}
+          features={store.features}
+          selected={selectedApplication}
+          onSelect={setSelectedApplication}
+          onAddApplication={name => { store.addDraftApplication(name); setSelectedApplication(name) }}
         />
-        {searchTerm && (
-          <button className="search-clear" onClick={() => setSearchTerm('')}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        )}
-      </div>
 
-      {/* Error Modal */}
-      {error && (
-        <div className="modal-overlay" onClick={() => setError(null)}>
-          <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
-            <div className="modal-header modal-header-error">
-              <h2>Error</h2>
-              <button className="modal-close" onClick={() => setError(null)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="error-modal-content">
-                <svg className="error-modal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 8v4M12 16h.01" />
-                </svg>
-                <p>{error}</p>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button 
-                type="button" 
-                className="modal-btn modal-btn-primary"
-                onClick={() => setError(null)}
-              >
-                OK
-              </button>
+        <main className="content">
+          <div className="page-heading">
+            <div>
+              <h1 className="page-title">{selectedApplication ?? 'All features'}</h1>
+              <p className="page-subtitle">
+                {selectedApplication ? `Feature flags of the ${selectedApplication} application` : 'Feature flags across all applications'}
+              </p>
             </div>
           </div>
-        </div>
-      )}
 
-      <main>
-        {loading && (
-          <div className="loading-container">
-            <div className="loading-spinner"></div>
-            <p>Loading features...</p>
-          </div>
-        )}
+          <section className="stats" aria-label="Summary">
+            <Stat label="Total" value={scoped.length} />
+            <Stat label="Enabled" value={enabledCount} dot="success" total={scoped.length} />
+            <Stat label="Disabled" value={scoped.length - enabledCount} dot="muted" total={scoped.length} />
+          </section>
 
-        {!loading && !error && (
-          <div className="feature-list">
-            {filteredFeatures.length === 0 ? (
-              <div className="empty-state">
-                <svg className="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                <p>{searchTerm ? 'No features match your search.' : 'No features configured.'}</p>
-              </div>
-            ) : (
-              filteredFeatures.map(f => (
-                <div key={f.name} className={`feature-item ${expandedFeature === f.name ? 'expanded' : ''}`}>
-                  <div className="feature-row" onClick={() => setExpandedFeature(expandedFeature === f.name ? null : f.name)}>
-                    <button
-                      className="delete-btn"
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(f.name); }}
-                      aria-label={`Delete ${f.name}`}
-                      title="Delete feature"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
-                      </svg>
-                    </button>
-                    <button
-                      className="edit-btn"
-                      onClick={(e) => { e.stopPropagation(); setEditTarget({ name: f.name, application: f.application, description: f.description, isEnabled: f.isEnabled }); }}
-                      aria-label={`Edit ${f.name}`}
-                      title="Edit feature"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                    </button>
-                    <div className="feature-info">
-                      <span className="feature-name">
-                        {f.name}
-                        {f.filters.length > 0 && (
-                          <span className="filter-badge" title={`${f.filters.length} filter(s)`}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
-                            </svg>
-                            {f.filters.length}
-                          </span>
-                        )}
-                      </span>
-                      {f.description && <span className="feature-description" title={f.description}>{f.description}</span>}
-                    </div>
-                    {f.createdAt && <FeatureActivity createdAt={f.createdAt} updatedAt={f.updatedAt} />}
-                    {usage && <FeatureUsageSpark name={f.name} days={usage.get(f.name)} onOpen={setUsageTarget} />}
-                    <button
-                      className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
-                      onClick={(e) => { e.stopPropagation(); toggleFeature(f.name, f.isEnabled); }}
-                      disabled={updating === f.name || (savingEdit && editTarget?.name === f.name)}
-                      aria-label={`Toggle ${f.name}`}
-                    >
-                      <span className="toggle-track">
-                        <span className="toggle-thumb"></span>
-                      </span>
-                      <span className="toggle-text">{f.isEnabled ? 'Enabled' : 'Disabled'}</span>
-                    </button>
-                    <svg className={`expand-icon ${expandedFeature === f.name ? 'rotated' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                  </div>
-                  {expandedFeature === f.name && (
-                    <div className="feature-details">
-                      {f.filters.length === 0 ? (
-                        <div className="no-filters-container">
-                          <p className="no-filters">No filters configured for this feature.</p>
-                          {availableFilters.length > 0 && (
-                            <button
-                              className="add-filter-btn"
-                              onClick={() => openAddFilterModal(f.name)}
-                            >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M12 5v14M5 12h14" />
-                              </svg>
-                              Add Filter
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="filters-section">
-                          {f.filters.map((filter, idx) => {
-                            const isEditing = editingFilter?.featureName === f.name && editingFilter?.filterIndex === idx
-                            return (
-                              <div key={idx} className="filter-item">
-                                <div className="filter-header">
-                                  <div className="filter-type">{filter.filterType}</div>
-                                  <div className="filter-actions">
-                                    {!isEditing && filter.parameters && (
-                                      <button
-                                        className="edit-filter-btn"
-                                        onClick={() => startEditingFilter(f.name, idx, filter.parameters)}
-                                        title="Edit parameters"
-                                      >
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                        </svg>
-                                      </button>
-                                    )}
-                                    {!isEditing && (
-                                      <button
-                                        className="delete-filter-btn"
-                                        onClick={() => setDeleteFilterTarget({ featureName: f.name, filterIndex: idx, filterType: filter.filterType })}
-                                        title="Delete filter"
-                                      >
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                          <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                                        </svg>
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                                {filter.parameters && (
-                                  isEditing ? (
-                                    <div className="filter-edit">
-                                      <textarea
-                                        className={`filter-params-input ${jsonError ? 'error' : ''}`}
-                                        value={editedParams}
-                                        onChange={(e) => handleParamsChange(e.target.value)}
-                                        disabled={savingFilter}
-                                        rows={6}
-                                      />
-                                      {jsonError && <span className="json-error">{jsonError}</span>}
-                                      <div className="filter-edit-actions">
-                                        <button
-                                          className="filter-btn filter-btn-cancel"
-                                          onClick={cancelEditingFilter}
-                                          disabled={savingFilter}
-                                        >
-                                          Cancel
-                                        </button>
-                                        <button
-                                          className="filter-btn filter-btn-save"
-                                          onClick={saveFilterParams}
-                                          disabled={savingFilter || !!jsonError}
-                                        >
-                                          {savingFilter ? <span className="btn-loading"></span> : 'Save'}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <pre className="filter-params">{JSON.stringify(JSON.parse(filter.parameters), null, 2)}</pre>
-                                  )
-                                )}
-                              </div>
-                            )
-                          })}
-                          {availableFilters.some(filter => !f.filters.some(existing => existing.filterType === filter.name)) && (
-                            <button
-                              className="add-filter-btn add-filter-btn-inline"
-                              onClick={() => openAddFilterModal(f.name)}
-                            >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M12 5v14M5 12h14" />
-                              </svg>
-                              Add Filter
-                            </button>
-                          )}
-                        </div>
-                      )}
-                      {f.createdAt && <FeatureDates createdAt={f.createdAt} updatedAt={f.updatedAt} />}
-                    </div>
-                  )}
-                </div>
-              ))
+          {store.loadError && (
+            <div className="alert" role="alert">
+              <Icon name="alert" />
+              <span className="alert-text">
+                <strong>Couldn't load features</strong>
+                {store.loadError}{store.lastUpdated && ' — showing the last loaded data.'}
+              </span>
+              <Button size="sm" onClick={store.refresh} loading={store.refreshing}>Retry</Button>
+            </div>
+          )}
+
+          <div className="toolbar">
+            <div className="search" role="search">
+              <label htmlFor={searchId} className="visually-hidden">Search features</label>
+              <Icon name="search" className="search-icon" />
+              <input
+                id={searchId}
+                type="search"
+                className="input"
+                placeholder="Search by name or description…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') setSearch('') }}
+                autoComplete="off"
+              />
+              {search && <IconButton icon="x" label="Clear search" onClick={() => setSearch('')} />}
+            </div>
+            {store.loaded && scoped.length > 0 && (
+              <span className="toolbar-count" aria-live="polite">
+                {visible.length === scoped.length ? `${scoped.length} feature${scoped.length === 1 ? '' : 's'}` : `${visible.length} of ${scoped.length}`}
+              </span>
             )}
           </div>
-        )}
-      </main>
-        </div>{/* end dashboard-content */}
-      </div>{/* end dashboard-layout */}
 
-      {/* Delete Feature Confirmation Modal */}
-      {deleteTarget && (
-        <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
-          <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Delete Feature</h2>
-              <button className="modal-close" onClick={() => setDeleteTarget(null)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="modal-body">
-              <p className="delete-confirm-text">
-                Are you sure you want to delete <strong>{deleteTarget}</strong>? This action cannot be undone.
-              </p>
-            </div>
-            <div className="modal-footer">
-              <button 
-                type="button" 
-                className="modal-btn modal-btn-cancel"
-                onClick={() => setDeleteTarget(null)}
-                disabled={deleting}
-              >
-                Cancel
-              </button>
-              <button 
-                type="button" 
-                className="modal-btn modal-btn-danger"
-                onClick={deleteFeature}
-                disabled={deleting}
-              >
-                {deleting ? <span className="btn-loading btn-loading-danger"></span> : 'Delete'}
-              </button>
-            </div>
+          <div className="card feature-list">
+            {!store.loaded ? (
+              <SkeletonRows />
+            ) : visible.length === 0 ? (
+              store.loadError && store.features.length === 0 ? (
+                <EmptyState icon="alert" title="Nothing to show" text="Features will appear here once they load." />
+              ) : term ? (
+                <EmptyState
+                  icon="search"
+                  title="No matching features"
+                  text={`Nothing matches “${search.trim()}”${selectedApplication ? ` in ${selectedApplication}` : ''}.`}
+                  action={<Button size="sm" onClick={() => setSearch('')}>Clear search</Button>}
+                />
+              ) : (
+                <EmptyState
+                  icon="flag"
+                  title={selectedApplication ? `No features in ${selectedApplication}` : 'No features yet'}
+                  text="Create a feature flag to start controlling functionality at runtime."
+                  action={<Button variant="primary" size="sm" icon="plus" onClick={() => setDialog({ kind: 'create' })}>Create feature</Button>}
+                />
+              )
+            ) : (
+              <>
+                <div className="feature-list-header" aria-hidden="true">
+                  <span className="col-name">Feature</span>
+                  <span className="col-activity">Last activity</span>
+                  {store.usage && <span className="col-usage">Usage · {SPARK_DAYS}d</span>}
+                  <span className="col-state">State</span>
+                  <span className="col-actions" />
+                </div>
+                <ul className="feature-rows" aria-label="Features">
+                  {visible.map(f => (
+                    <FeatureRow
+                      key={f.name}
+                      feature={f}
+                      expanded={expanded === f.name}
+                      onToggleExpanded={() => setExpanded(expanded === f.name ? null : f.name)}
+                      usage={store.usage}
+                      store={store}
+                      editingName={dialog?.kind === 'edit' ? dialog.name : null}
+                      onEdit={() => setDialog({ kind: 'edit', name: f.name })}
+                      onDelete={() => setDialog({ kind: 'delete', name: f.name })}
+                      onOpenUsage={name => setDialog({ kind: 'usage', name })}
+                      onAddFilter={() => setDialog({ kind: 'addFilter', name: f.name })}
+                      onDeleteFilter={index => setDialog({ kind: 'deleteFilter', name: f.name, index, filterType: f.filters[index].filterType })}
+                    />
+                  ))}
+                </ul>
+              </>
+            )}
           </div>
-        </div>
-      )}
+        </main>
+      </div>
 
-      {/* Delete Filter Confirmation Modal */}
-      {deleteFilterTarget && (
-        <div className="modal-overlay" onClick={() => setDeleteFilterTarget(null)}>
-          <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Delete Filter</h2>
-              <button className="modal-close" onClick={() => setDeleteFilterTarget(null)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="modal-body">
-              <p className="delete-confirm-text">
-                Are you sure you want to delete the <strong>{deleteFilterTarget.filterType}</strong> filter from <strong>{deleteFilterTarget.featureName}</strong>?
-              </p>
-            </div>
-            <div className="modal-footer">
-              <button 
-                type="button" 
-                className="modal-btn modal-btn-cancel"
-                onClick={() => setDeleteFilterTarget(null)}
-                disabled={deletingFilterInProgress}
-              >
-                Cancel
-              </button>
-              <button 
-                type="button" 
-                className="modal-btn modal-btn-danger"
-                onClick={deleteFilter}
-                disabled={deletingFilterInProgress}
-              >
-                {deletingFilterInProgress ? <span className="btn-loading btn-loading-danger"></span> : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <footer className="footer">
+        <span>{store.lastUpdated ? `Last updated ${store.lastUpdated.toLocaleTimeString()}` : ' '}</span>
+        <span className="footer-brand">
+          <a href="https://github.com/rochar/Stella.FeatureManagement.Dashboard" target="_blank" rel="noopener noreferrer">Stella.Apps</a>
+          <span>v{__APP_VERSION__}</span>
+        </span>
+      </footer>
 
-      {usageTarget && (
-        <UsageModal featureName={usageTarget} usageApiBase={USAGE_API_BASE} onClose={closeUsageModal} />
+      {dialog?.kind === 'create' && (
+        <FeatureFormDialog mode="create" defaultApplication={selectedApplication ?? 'Default'} store={store} onClose={closeDialog} />
       )}
-
-      {/* Add Filter Modal */}
-      {addFilterTarget && (
-        <div className="modal-overlay" onClick={closeAddFilterModal}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Add Filter</h2>
-              <button className="modal-close" onClick={closeAddFilterModal}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="modal-body">
-              <p className="modal-subtitle">Adding filter to <strong>{addFilterTarget}</strong></p>
-              
-              <label className="modal-label">Filter Type</label>
-              <select
-                className="modal-select"
-                value={selectedFilterName}
-                onChange={(e) => handleFilterSelectionChange(e.target.value)}
-                disabled={addingFilter}
-              >
-                <option value="">Select a filter...</option>
-                {availableFilters
-                  .filter(filter => {
-                    const targetFeature = features.find(f => f.name === addFilterTarget)
-                    if (!targetFeature) return true
-                    return !targetFeature.filters.some(existingFilter => existingFilter.filterType === filter.name)
-                  })
-                  .map(filter => (
-                  <option key={filter.name} value={filter.name}>
-                    {filter.name}
-                  </option>
-                ))}
-              </select>
-
-              {selectedFilterName && (
-                <>
-                  <label className="modal-label" style={{ marginTop: '16px' }}>Parameters (JSON)</label>
-                  <textarea
-                    className={`filter-params-input ${newFilterJsonError ? 'error' : ''}`}
-                    value={newFilterParams}
-                    onChange={(e) => handleNewFilterParamsChange(e.target.value)}
-                    disabled={addingFilter}
-                    rows={8}
-                  />
-                  {newFilterJsonError && <span className="json-error">{newFilterJsonError}</span>}
-                </>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button 
-                type="button" 
-                className="modal-btn modal-btn-cancel"
-                onClick={closeAddFilterModal}
-                disabled={addingFilter}
-              >
-                Cancel
-              </button>
-              <button 
-                type="button" 
-                className="modal-btn modal-btn-primary"
-                onClick={addFilterToFeature}
-                disabled={addingFilter || !selectedFilterName || !!newFilterJsonError}
-              >
-                {addingFilter ? <span className="btn-loading"></span> : 'Add Filter'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {dialog?.kind === 'edit' && dialogFeature && (
+        <FeatureFormDialog mode="edit" feature={dialogFeature} store={store} onClose={closeDialog} />
       )}
-
-      {lastUpdated && (
-        <footer className="footer">
-          <span className="footer-updated">Last updated: {lastUpdated.toLocaleTimeString()}</span>
-          <div className="footer-brand-container">            
-            <a href="https://github.com/rochar/Stella.FeatureManagement.Dashboard" target="_blank" rel="noopener noreferrer" className="footer-brand">Stella.Apps</a>            <span className="footer-version">v{__APP_VERSION__}</span>
-          </div>
-        </footer>
+      {dialog?.kind === 'addFilter' && dialogFeature && (
+        <AddFilterDialog feature={dialogFeature} store={store} onClose={closeDialog} />
       )}
+      {dialog?.kind === 'delete' && (
+        <ConfirmDialog
+          title="Delete feature?"
+          confirmLabel="Delete feature"
+          busy={deleting}
+          error={deleteError}
+          onConfirm={() => confirmDeleteFeature(dialog.name)}
+          onClose={closeDialog}
+        >
+          <strong>{dialog.name}</strong> and its filters will be permanently deleted. Code that checks this flag will treat it as disabled.
+        </ConfirmDialog>
+      )}
+      {dialog?.kind === 'deleteFilter' && (
+        <ConfirmDialog
+          title="Remove filter?"
+          confirmLabel="Remove filter"
+          busy={deleting}
+          error={deleteError}
+          onConfirm={() => confirmDeleteFilter(dialog.name, dialog.index, dialog.filterType)}
+          onClose={closeDialog}
+        >
+          The <strong>{dialog.filterType}</strong> filter will be removed from <strong>{dialog.name}</strong>.
+        </ConfirmDialog>
+      )}
+      {dialog?.kind === 'usage' && (
+        <UsageModal featureName={dialog.name} onClose={closeDialog} />
+      )}
+    </>
+  )
+}
+
+function Stat({ label, value, dot, total }: { label: string; value: number; dot?: 'success' | 'muted'; total?: number }) {
+  return (
+    <div className="card stat">
+      <div className="stat-label">
+        {dot && <span className={`stat-dot stat-dot-${dot}`} aria-hidden="true" />}
+        {label}
+      </div>
+      <div className="stat-value">{value}</div>
+      {total !== undefined && total > 0 && <div className="stat-meta">{Math.round((value / total) * 100)}% of total</div>}
     </div>
+  )
+}
+
+function EmptyState({ icon, title, text, action }: { icon: 'alert' | 'search' | 'flag'; title: string; text: string; action?: React.ReactNode }) {
+  return (
+    <div className="empty-state">
+      <span className="empty-state-icon"><Icon name={icon} /></span>
+      <p className="empty-state-title">{title}</p>
+      <p className="empty-state-text">{text}</p>
+      {action}
+    </div>
+  )
+}
+
+function SkeletonRows() {
+  return (
+    <div role="status" aria-label="Loading features">
+      {Array.from({ length: 5 }, (_, i) => (
+        <div key={i} className="skeleton-row" aria-hidden="true">
+          <span className="skeleton" style={{ width: 16, height: 16 }} />
+          <span className="skeleton-lines">
+            <span className="skeleton" style={{ width: `${40 + ((i * 17) % 30)}%`, height: 12 }} />
+            <span className="skeleton" style={{ width: `${55 + ((i * 11) % 25)}%`, height: 10 }} />
+          </span>
+          <span className="skeleton" style={{ width: 88, height: 20, borderRadius: 999 }} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const THEME_LABEL: Record<ThemePreference, string> = { system: 'System', light: 'Light', dark: 'Dark' }
+const THEME_ICON = { system: 'monitor', light: 'sun', dark: 'moon' } as const
+
+function ThemeButton({ theme, onClick }: { theme: ThemePreference; onClick: () => void }) {
+  return (
+    <IconButton
+      icon={THEME_ICON[theme]}
+      label={`Theme: ${THEME_LABEL[theme]} (click to change)`}
+      bordered
+      onClick={onClick}
+    />
   )
 }

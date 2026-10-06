@@ -37,4 +37,5 @@ characters.
 
 - ADR-20261006-additive-public-dto-fields — accepted — add public DTO fields as init-only props, not ctor params
 - ADR-20261006-buffered-usage-counters — accepted — buffer usage counts in memory; flush via additive upsert
+- ADR-20261006-dependency-free-dashboard-ui — accepted — UI stays react-only; token CSS with dark mode; own primitives
 - ADR-20261006-usage-read-api-and-index — accepted — serve usage from its own endpoint; index Date, non-covering

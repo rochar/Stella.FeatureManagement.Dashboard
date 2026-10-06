@@ -21,7 +21,7 @@ export default defineConfig({
   },
   build: {
     outDir: path.resolve(__dirname, '../Stella.FeatureManagement.Dashboard/wwwroot'),
-    emptyDirBeforeWrite: true,
+    emptyOutDir: true,
     rollupOptions: {
       output: {
         entryFileNames: 'assets/[name].js',

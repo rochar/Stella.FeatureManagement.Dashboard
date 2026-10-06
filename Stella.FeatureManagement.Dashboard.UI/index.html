@@ -3,7 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Manage and monitor feature flags" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f46e5'/%3E%3Cpath d='M10 19s1-1 4-1 4 2 7 2 3-1 3-1V9s-1 1-3 1-4-2-7-2-4 1-4 1zM10 25v-6' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
     <title>Feature Management Dashboard</title>
+    <script>
+      // Apply the stored theme before first paint (see src/hooks/useTheme.ts) so dark mode doesn't flash light.
+      try {
+        var theme = localStorage.getItem('ff-dashboard-theme');
+        if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

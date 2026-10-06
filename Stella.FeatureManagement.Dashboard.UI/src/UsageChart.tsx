@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react'
+import { errorDetail, fetchFeatureUsage } from './api'
+import { Dialog } from './components/Dialog'
+import { Icon } from './components/Icon'
 
 export interface DailyUsage {
   date: string
@@ -116,9 +119,8 @@ export function UsageChart({ days, variant }: { days: DailyUsage[]; variant: 'sp
 
 const MODAL_DAYS = 30
 
-export function UsageModal({ featureName, usageApiBase, onClose }: {
+export function UsageModal({ featureName, onClose }: {
   featureName: string
-  usageApiBase: string
   onClose: () => void
 }) {
   const [days, setDays] = useState<DailyUsage[] | null>(null)
@@ -126,79 +128,68 @@ export function UsageModal({ featureName, usageApiBase, onClose }: {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch(`${usageApiBase}/${encodeURIComponent(featureName)}?days=${MODAL_DAYS}`, { signal: controller.signal })
-      .then(async res => {
-        if (!res.ok) throw new Error(`Failed to load usage (${res.status})`)
-        const data: FeatureUsage = await res.json()
-        setDays(data.days)
-      })
+    fetchFeatureUsage(featureName, MODAL_DAYS, controller.signal)
+      .then(setDays)
       .catch(err => {
-        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Failed to load usage')
+        if (!controller.signal.aborted) setError(errorDetail(err, 'Failed to load usage'))
       })
     return () => controller.abort()
-  }, [featureName, usageApiBase])
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+  }, [featureName])
 
   const enabled = days?.reduce((sum, d) => sum + d.enabledCount, 0) ?? 0
   const total = days ? totalUsage(days) : 0
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Usage</h2>
-          <button className="modal-close" onClick={onClose} aria-label="Close">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
+    <Dialog
+      title="Usage"
+      description={<><strong>{featureName}</strong> · evaluations over the last {MODAL_DAYS} days (UTC)</>}
+      size="lg"
+      onClose={onClose}
+    >
+      {error && (
+        <div className="alert" role="alert">
+          <Icon name="alert" />
+          <span className="alert-text">{error}</span>
         </div>
-        <div className="modal-body">
-          <p className="modal-subtitle"><strong>{featureName}</strong> · last {MODAL_DAYS} days (UTC)</p>
-          {error && <p className="usage-error">{error}</p>}
-          {!days && !error && (
-            <div className="loading-container usage-loading">
-              <div className="loading-spinner"></div>
-            </div>
-          )}
-          {days && total === 0 && (
-            <div className="usage-empty-state">
-              <NoUsageIcon className="usage-empty-icon" />
-              <p>No usage in the last {MODAL_DAYS} days.</p>
-            </div>
-          )}
-          {days && total > 0 && (
-            <>
-              <div className="usage-summary">
-                <div>
-                  <span className="usage-summary-value">{numberFormatter.format(total)}</span>
-                  <span className="usage-summary-label">Evaluations</span>
-                </div>
-                <div>
-                  <span className="usage-summary-value">
-                    <span className="usage-swatch usage-swatch-enabled" />
-                    {numberFormatter.format(enabled)}
-                  </span>
-                  <span className="usage-summary-label">Enabled · {Math.round((enabled / total) * 100)}%</span>
-                </div>
-                <div>
-                  <span className="usage-summary-value">
-                    <span className="usage-swatch usage-swatch-disabled" />
-                    {numberFormatter.format(total - enabled)}
-                  </span>
-                  <span className="usage-summary-label">Disabled</span>
-                </div>
-              </div>
-              <UsageChart days={days} variant="full" />
-            </>
-          )}
+      )}
+      {!days && !error && (
+        <div className="usage-loading" role="status">
+          <span className="spinner" aria-hidden="true" />
+          <span className="visually-hidden">Loading usage…</span>
         </div>
-      </div>
-    </div>
+      )}
+      {days && total === 0 && (
+        <div className="empty-state">
+          <span className="empty-state-icon"><NoUsageIcon className="usage-empty-icon" /></span>
+          <p className="empty-state-title">No usage yet</p>
+          <p className="empty-state-text">This feature wasn't evaluated in the last {MODAL_DAYS} days.</p>
+        </div>
+      )}
+      {days && total > 0 && (
+        <>
+          <div className="usage-summary">
+            <div>
+              <span className="usage-summary-value">{numberFormatter.format(total)}</span>
+              <span className="usage-summary-label">Evaluations</span>
+            </div>
+            <div>
+              <span className="usage-summary-value">
+                <span className="usage-swatch usage-swatch-enabled" />
+                {numberFormatter.format(enabled)}
+              </span>
+              <span className="usage-summary-label">Enabled · {Math.round((enabled / total) * 100)}%</span>
+            </div>
+            <div>
+              <span className="usage-summary-value">
+                <span className="usage-swatch usage-swatch-disabled" />
+                {numberFormatter.format(total - enabled)}
+              </span>
+              <span className="usage-summary-label">Disabled</span>
+            </div>
+          </div>
+          <UsageChart days={days} variant="full" />
+        </>
+      )}
+    </Dialog>
   )
 }
