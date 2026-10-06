@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.FeatureManagement;
+using Stella.FeatureManagement.Dashboard.Services;
 
 namespace Stella.FeatureManagement.Dashboard.EndPoints;
 
@@ -15,7 +16,7 @@ internal static class GetFeaturesFromFeatureManager
     public static RouteGroupBuilder MapGetFeaturesFromFeatureManager(this RouteGroupBuilder routeGroup)
     {
         routeGroup.MapGet("{featureName}", async (string featureName, IFeatureManager featureManager,
-            HttpContext httpContext) =>
+            IFeatureUsageRecorder usageRecorder, HttpContext httpContext) =>
         {
             var parameters = httpContext.Request.Query
                 .ToDictionary(q => q.Key, q => q.Value.ToString(), StringComparer.OrdinalIgnoreCase)
@@ -23,7 +24,9 @@ internal static class GetFeaturesFromFeatureManager
 
             httpContext.Items[FeatureEvaluationRequestContext.HttpContextItemsKey] = parameters;
 
-            return await featureManager.IsEnabledAsync(featureName);
+            var isEnabled = await featureManager.IsEnabledAsync(featureName);
+            usageRecorder.Record(featureName, isEnabled);
+            return isEnabled;
         }).Produces<bool>(200);
 
         return routeGroup;

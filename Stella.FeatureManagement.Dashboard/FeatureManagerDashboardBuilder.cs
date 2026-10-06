@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.FeatureManagement;
 using Microsoft.FeatureManagement.FeatureFilters;
@@ -36,7 +37,13 @@ public class FeatureManagerDashboardBuilder : IFeatureManagerDashboardBuilder
         _builder.Services.AddSingleton<IFeatureFilterRepository>(_filterRepository);
         _builder.Services.AddHttpContextAccessor();
         _builder.Services.AddSingleton<IFeatureEvaluationRequestContext, FeatureEvaluationRequestContext>();
-        
+        _builder.Services.TryAddSingleton(TimeProvider.System);
+        _builder.Services.AddOptions<FeatureUsageOptions>()
+            .Validate(o => o.FlushInterval > TimeSpan.Zero, "FeatureUsageOptions.FlushInterval must be positive.")
+            .ValidateOnStart();
+        _builder.Services.AddSingleton<IFeatureUsageRecorder, FeatureUsageRecorder>();
+        _builder.Services.AddHostedService<FeatureUsageFlushService>();
+
         _filterRepository.AddFilter<PercentageFilter>(new PercentageFilterSettings(){Value = 50});
         _filterRepository.AddFilter<TimeWindowFilter>(new TimeWindowFilterSettings(){Start = DateTime.UtcNow,End = DateTime.UtcNow.AddDays(1)});
     }

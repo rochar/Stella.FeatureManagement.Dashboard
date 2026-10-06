@@ -39,3 +39,4 @@ keep the whole line at most 120 characters.
 ## Index
 
 - LRN-20261003-aspire-postgres-image — Pin AppHost Postgres tag (18) before WithDataVolume; an unpinned default can break the volume
+- LRN-20261006-xunit-v3-test-filter — dotnet test --filter is ignored (xunit v3); use -- --filter-class/--filter-method

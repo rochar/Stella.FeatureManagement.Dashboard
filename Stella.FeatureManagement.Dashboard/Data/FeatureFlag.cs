@@ -44,6 +44,11 @@ public class FeatureFlag
     public ICollection<FeatureFilter> Filters { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets the daily usage counters for this feature.
+    /// </summary>
+    public ICollection<FeatureFlagUsage> Usages { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets when the feature was created.
     /// </summary>
     public DateTime CreatedAt { get; set; } = UtcNowForStorage();

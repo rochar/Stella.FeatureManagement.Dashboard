@@ -25,6 +25,11 @@ internal class FeatureFlagDbContext : DbContext
     /// </summary>
     public DbSet<FeatureFilter> FeatureFilters => Set<FeatureFilter>();
 
+    /// <summary>
+    /// Gets the daily feature usage counters.
+    /// </summary>
+    public DbSet<FeatureFlagUsage> FeatureFlagUsages => Set<FeatureFlagUsage>();
+
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -43,6 +48,11 @@ internal class FeatureFlagDbContext : DbContext
                 .WithOne(f => f.FeatureFlag)
                 .HasForeignKey(f => f.FeatureFlagId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.Usages)
+                .WithOne(u => u.FeatureFlag)
+                .HasForeignKey(u => u.FeatureFlagId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<FeatureFilter>(entity =>
@@ -51,6 +61,12 @@ internal class FeatureFlagDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.FilterType).HasMaxLength(256).IsRequired();
             entity.Property(e => e.Parameters).HasMaxLength(4000);
+        });
+
+        modelBuilder.Entity<FeatureFlagUsage>(entity =>
+        {
+            entity.ToTable("FeatureFlagUsages");
+            entity.HasKey(e => new { e.FeatureFlagId, e.Date });
         });
     }
 }
