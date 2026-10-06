@@ -11,6 +11,8 @@ interface FeatureState {
   description: string | null
   filters: FeatureFilter[]
   application: string
+  createdAt?: string | null
+  updatedAt?: string | null
 }
 
 interface AvailableFilter {
@@ -30,6 +32,21 @@ const FILTERS_API_BASE = import.meta.env.VITE_API_URL
 const APPLICATIONS_API_BASE = import.meta.env.VITE_API_URL 
   ? `${import.meta.env.VITE_API_URL}/features/dashboardapi/applications` 
   : '../dashboardapi/applications'
+
+// One formatter for all rows: toLocaleString with options builds a new Intl.DateTimeFormat per call.
+const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+const formatDate = (iso: string) => dateFormatter.format(new Date(iso))
+
+function FeatureTimestamps({ createdAt, updatedAt }: { createdAt: string; updatedAt?: string | null }) {
+  const created = formatDate(createdAt)
+  const updated = updatedAt ? formatDate(updatedAt) : null
+  return (
+    <span className="feature-meta" title={`Created ${created}${updated ? ` · Updated ${updated}` : ''}`}>
+      Created {created}
+      {updated && updated !== created && <> · Updated {updated}</>}
+    </span>
+  )
+}
 
 const featureUrl = (name: string) => `${API_BASE}/${encodeURIComponent(name)}`
 
@@ -154,7 +171,10 @@ export default function App() {
     )
 
     try {
-      await putFeature(feature, { isEnabled: newState }, 'Failed to update feature')
+      const res = await putFeature(feature, { isEnabled: newState }, 'Failed to update feature')
+      // Use the server's copy so the refreshed updatedAt is shown
+      const updated = await res.json()
+      setFeatures(prev => prev.map(f => f.name === featureName ? updated : f))
 
       setLastUpdated(new Date())
     } catch (err) {
@@ -328,6 +348,19 @@ export default function App() {
     const filter = feature.filters[editingFilter.filterIndex]
     if (!filter) return
 
+    // Unchanged: skip the PUT, which would bump UpdatedAt and run OnFeatureChanging (same as saveFeatureEdit).
+    const newParams = JSON.stringify(JSON.parse(editedParams))
+    let currentParams: string | null = null
+    try {
+      currentParams = filter.parameters ? JSON.stringify(JSON.parse(filter.parameters)) : null
+    } catch {
+      // Stored parameters are not valid JSON: treat as changed
+    }
+    if (newParams === currentParams) {
+      cancelEditingFilter()
+      return
+    }
+
     setSavingFilter(true)
     setError(null)
 
@@ -335,7 +368,7 @@ export default function App() {
       // Update the specific filter and keep the rest
       const updatedFilters = feature.filters.map((f, idx) =>
         idx === editingFilter.filterIndex
-          ? { filterType: f.filterType, parameters: JSON.stringify(JSON.parse(editedParams)) }
+          ? { filterType: f.filterType, parameters: newParams }
           : f
       )
 
@@ -352,7 +385,7 @@ export default function App() {
     } finally {
       setSavingFilter(false)
     }
-  }, [editingFilter, editedParams, features, validateJson])
+  }, [editingFilter, editedParams, features, validateJson, cancelEditingFilter])
 
   const deleteFilter = useCallback(async () => {
     if (!deleteFilterTarget) return
@@ -866,6 +899,7 @@ export default function App() {
                         )}
                       </span>
                       {f.description && <span className="feature-description">{f.description}</span>}
+                      {f.createdAt && <FeatureTimestamps createdAt={f.createdAt} updatedAt={f.updatedAt} />}
                     </div>
                     <button
                       className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}

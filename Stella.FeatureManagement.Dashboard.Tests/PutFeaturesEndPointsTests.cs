@@ -46,6 +46,43 @@ public class PutFeaturesEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
     }
 
     [Fact]
+    public async Task WhenPutFeatureRefreshesUpdatedAtAndKeepsCreatedAt()
+    {
+        // Arrange
+        var featureName = $"FeatureTimestamps_{Guid.NewGuid():N}";
+        var createResponse = await _client.PostAsJsonAsync($"{WebApp.ApiBaseUrl}/features",
+            new { Name = featureName, IsEnabled = false }, TestContext.Current.CancellationToken);
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var created =
+            await createResponse.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        created.ShouldNotBeNull();
+        created.CreatedAt.ShouldNotBeNull();
+        created.UpdatedAt.ShouldBe(created.CreatedAt);
+
+        // Act
+        var response = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/{featureName}",
+            new { IsEnabled = true }, TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var putResult =
+            await response.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        putResult.ShouldNotBeNull();
+
+        var getResponse = await _client.GetAsync($"{WebApp.ApiBaseUrl}/features/{featureName}",
+            TestContext.Current.CancellationToken);
+        getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var updated =
+            await getResponse.Content.ReadFromJsonAsync<FeatureStateResponse>(TestContext.Current.CancellationToken);
+        updated.ShouldNotBeNull();
+        // Responses carry the stored (microsecond) precision, so they match what GET reads back exactly
+        updated.CreatedAt.ShouldBe(created.CreatedAt);
+        updated.UpdatedAt.ShouldBe(putResult.UpdatedAt);
+        updated.UpdatedAt.ShouldNotBeNull();
+        updated.UpdatedAt.Value.ShouldBeGreaterThan(created.UpdatedAt!.Value);
+    }
+
+    [Fact]
     public async Task WhenPutFeatureUpdatesStateWithFilter()
     {
         // Arrange - Create a feature without a filter

@@ -824,6 +824,13 @@ h1 {
   line-height: 1.4;
 }
 
+.feature-meta {
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+  font-weight: 400;
+  opacity: 0.8;
+}
+
 .delete-btn {
   display: flex;
   align-items: center;

@@ -35,4 +35,4 @@ characters.
 
 ## Index
 
-_No ADRs yet._
+- ADR-20261006-additive-public-dto-fields — accepted — add public DTO fields as init-only props, not ctor params

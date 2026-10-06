@@ -33,7 +33,7 @@ internal static class PutFeaturesExtension
                     return Results.NotFound(new { message = $"Feature '{featureName}' not found." });
                 }
 
-                var canProceed = featureChangeValidation.CanProceed(request.ToDto(featureName, feature.Application), FeatureChangeType.Update);
+                var canProceed = featureChangeValidation.CanProceed(request.ToDto(feature), FeatureChangeType.Update);
 
                 if (canProceed.Cancel)
                 {
@@ -57,7 +57,7 @@ internal static class PutFeaturesExtension
     {
         feature.IsEnabled = request.IsEnabled;
         feature.Description = request.Description;
-        feature.UpdatedAt = DateTime.UtcNow;
+        feature.UpdatedAt = FeatureFlag.UtcNowForStorage();
 
         if (request.Application is not null)
             feature.Application = request.Application;
@@ -78,13 +78,7 @@ internal static class PutFeaturesExtension
 
         await context.SaveChangesAsync();
 
-        var response = new FeatureFlagDto(
-            feature.Name,
-            feature.IsEnabled,
-            feature.Description,
-            feature.Filters.Select(f => new FeatureFilterDto(f.FilterType, f.Parameters)).ToList(),
-            feature.Application);
-        return response;
+        return feature.ToDto();
     }
 }
 
@@ -97,8 +91,12 @@ internal static class PutFeaturesExtension
 /// <param name="Application">The application this feature belongs to.</param>
 internal record UpdateFeatureRequest(bool IsEnabled, string? Description = null, List<FeatureFilterDto>? Filters = null, string? Application = null)
 {
-    public FeatureFlagDto ToDto(string name, string currentApplication)
+    public FeatureFlagDto ToDto(FeatureFlag current)
     {
-        return new FeatureFlagDto(name, IsEnabled, Description, Filters, Application ?? currentApplication);
+        return new FeatureFlagDto(current.Name, IsEnabled, Description, Filters, Application ?? current.Application)
+        {
+            CreatedAt = current.CreatedAt,
+            UpdatedAt = current.UpdatedAt
+        };
     }
 }

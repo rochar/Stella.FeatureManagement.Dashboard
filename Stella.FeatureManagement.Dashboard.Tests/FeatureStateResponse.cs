@@ -1,3 +1,3 @@
 namespace Stella.FeatureManagement.Dashboard.Tests;
 
-internal record FeatureStateResponse(string Name, bool IsEnabled, string? Description, List<FeatureFilterResponse> Filters, string? Application = null);
+internal record FeatureStateResponse(string Name, bool IsEnabled, string? Description, List<FeatureFilterResponse> Filters, string? Application = null, DateTime? CreatedAt = null, DateTime? UpdatedAt = null);

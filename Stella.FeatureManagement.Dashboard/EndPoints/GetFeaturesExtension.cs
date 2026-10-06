@@ -14,13 +14,7 @@ internal static class GetFeaturesExtension
         {
             await using var context = await contextFactory.CreateDbContextAsync();
             var features = await context.FeatureFlags
-                .Include(f => f.Filters)
-                .Select(f => new FeatureFlagDto(
-                    f.Name,
-                    f.IsEnabled,
-                    f.Description,
-                    f.Filters.Select(filter => new FeatureFilterDto(filter.FilterType, filter.Parameters)).ToList(),
-                    f.Application))
+                .Select(FeatureFlagMapping.AsDto)
                 .ToListAsync();
 
             return features;
@@ -30,14 +24,8 @@ internal static class GetFeaturesExtension
         {
             await using var context = await contextFactory.CreateDbContextAsync();
             var feature = await context.FeatureFlags
-                .Include(f => f.Filters)
                 .Where(f => f.Name == featureName)
-                .Select(f => new FeatureFlagDto(
-                    f.Name,
-                    f.IsEnabled,
-                    f.Description,
-                    f.Filters.Select(filter => new FeatureFilterDto(filter.FilterType, filter.Parameters)).ToList(),
-                    f.Application))
+                .Select(FeatureFlagMapping.AsDto)
                 .FirstOrDefaultAsync();
 
             return feature is null ? Results.NotFound() : Results.Ok(feature);

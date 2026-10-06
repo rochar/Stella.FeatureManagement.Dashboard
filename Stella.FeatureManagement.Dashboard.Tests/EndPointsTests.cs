@@ -39,6 +39,8 @@ public class GetFeaturesEndPointTests(WebApp webApp) : IClassFixture<WebApp>
         result.ShouldNotBeNull();
         result.Name.ShouldBe(featureName);
         result.IsEnabled.ShouldBe(isEnabled);
+        result.CreatedAt.ShouldNotBeNull();
+        result.UpdatedAt.ShouldNotBeNull();
     }
 
     [Fact]

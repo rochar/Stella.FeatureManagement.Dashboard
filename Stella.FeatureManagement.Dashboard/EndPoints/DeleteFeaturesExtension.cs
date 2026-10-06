@@ -27,8 +27,7 @@ internal static class DeleteFeaturesExtension
                     return Results.NotFound(new { message = $"Feature '{featureName}' not found." });
 
                 var canProceed =
-                    featureChangeValidation.CanProceed(new FeatureFlagDto(featureName, false, string.Empty, null),
-                        FeatureChangeType.Delete);
+                    featureChangeValidation.CanProceed(feature.ToDto(), FeatureChangeType.Delete);
 
                 if (canProceed.Cancel)
                 {

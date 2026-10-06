@@ -46,10 +46,20 @@ public class FeatureFlag
     /// <summary>
     /// Gets or sets when the feature was created.
     /// </summary>
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = UtcNowForStorage();
 
     /// <summary>
     /// Gets or sets when the feature was last updated.
     /// </summary>
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = UtcNowForStorage();
+
+    /// <summary>
+    /// Current UTC time truncated to PostgreSQL's microsecond precision, so a timestamp returned
+    /// right after a save matches the value read back from the database later.
+    /// </summary>
+    internal static DateTime UtcNowForStorage()
+    {
+        var now = DateTime.UtcNow;
+        return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMicrosecond));
+    }
 }

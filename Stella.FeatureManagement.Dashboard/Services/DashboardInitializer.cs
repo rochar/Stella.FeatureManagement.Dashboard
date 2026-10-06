@@ -28,14 +28,15 @@ internal sealed class DashboardInitializer(IManagedFeatureRegistration managedFe
         var exists = await context.FeatureFlags.AnyAsync(f => f.Name == name, cancellationToken);
         if (!exists)
         {
+            var now = FeatureFlag.UtcNowForStorage();
             var featureFlag = new FeatureFlag
             {
                 Name = name,
                 IsEnabled = isEnabled,
                 Description = description,
                 Application = application,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = now,
+                UpdatedAt = now
             };
 
             if (filterOptions is not null)
