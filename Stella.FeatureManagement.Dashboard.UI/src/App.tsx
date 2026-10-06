@@ -44,14 +44,44 @@ const SPARK_DAYS = 7
 const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 const formatDate = (iso: string) => dateFormatter.format(new Date(iso))
 
-function FeatureTimestamps({ createdAt, updatedAt }: { createdAt: string; updatedAt?: string | null }) {
-  const created = formatDate(createdAt)
-  const updated = updatedAt ? formatDate(updatedAt) : null
+const relativeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 31_536_000], ['month', 2_592_000], ['week', 604_800], ['day', 86_400], ['hour', 3_600], ['minute', 60],
+]
+function formatRelative(iso: string) {
+  const seconds = (new Date(iso).getTime() - Date.now()) / 1000
+  for (const [unit, size] of RELATIVE_UNITS) {
+    if (Math.abs(seconds) >= size) return relativeFormatter.format(Math.round(seconds / size), unit)
+  }
+  return 'just now'
+}
+
+// Edits within a minute of creation count as "never updated" (the create round-trip can stamp both).
+const wasUpdated = (createdAt: string, updatedAt?: string | null): updatedAt is string =>
+  !!updatedAt && new Date(updatedAt).getTime() - new Date(createdAt).getTime() > 60_000
+
+// Compact "last activity" column in a feature row: one relative time, absolute dates on hover.
+function FeatureActivity({ createdAt, updatedAt }: { createdAt: string; updatedAt?: string | null }) {
+  const updated = wasUpdated(createdAt, updatedAt)
+  const when = updated ? updatedAt : createdAt
+  const title = `Created ${formatDate(createdAt)}${updated ? `\nLast updated ${formatDate(updatedAt)}` : ''}`
   return (
-    <span className="feature-meta" title={`Created ${created}${updated ? ` · Updated ${updated}` : ''}`}>
-      Created {created}
-      {updated && updated !== created && <> · Updated {updated}</>}
+    <span className="feature-activity" title={title}>
+      <span className="feature-activity-label">{updated ? 'Updated' : 'Created'}</span>
+      <time className="feature-activity-value" dateTime={when}>{formatRelative(when)}</time>
     </span>
+  )
+}
+
+// Full, absolute dates at the bottom of the expanded panel (tooltips don't work on touch).
+function FeatureDates({ createdAt, updatedAt }: { createdAt: string; updatedAt?: string | null }) {
+  return (
+    <dl className="feature-dates">
+      <div><dt>Created</dt><dd><time dateTime={createdAt}>{formatDate(createdAt)}</time></dd></div>
+      {wasUpdated(createdAt, updatedAt) && (
+        <div><dt>Last updated</dt><dd><time dateTime={updatedAt}>{formatDate(updatedAt)}</time></dd></div>
+      )}
+    </dl>
   )
 }
 
@@ -952,9 +982,9 @@ export default function App() {
                           </span>
                         )}
                       </span>
-                      {f.description && <span className="feature-description">{f.description}</span>}
-                      {f.createdAt && <FeatureTimestamps createdAt={f.createdAt} updatedAt={f.updatedAt} />}
+                      {f.description && <span className="feature-description" title={f.description}>{f.description}</span>}
                     </div>
+                    {f.createdAt && <FeatureActivity createdAt={f.createdAt} updatedAt={f.updatedAt} />}
                     {usage && <FeatureUsageSpark name={f.name} days={usage.get(f.name)} onOpen={setUsageTarget} />}
                     <button
                       className={`toggle-switch ${f.isEnabled ? 'enabled' : 'disabled'}`}
@@ -1070,6 +1100,7 @@ export default function App() {
                           )}
                         </div>
                       )}
+                      {f.createdAt && <FeatureDates createdAt={f.createdAt} updatedAt={f.updatedAt} />}
                     </div>
                   )}
                 </div>
