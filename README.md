@@ -104,3 +104,68 @@ GET /features/dashboardapi/usage/{featureName}?days=30
 ```
 
 The `/features/{featureName}` endpoint returns a boolean feature state. The `/features/dashboardapi/*` endpoints are used by the dashboard UI for feature management.
+
+#### Updating a feature: `PUT /features/dashboardapi/features/{featureName}`
+
+The body replaces `isEnabled`, `description`, `filters` and (when sent) `application`. Add the optional
+`expectedUpdatedAt` to make the write a compare-and-set: send the `updatedAt` you read when the edit began,
+exactly as the API returned it (UTC, ending in `Z`).
+
+- **Current token** → `200` with the updated feature; its `updatedAt` always moves strictly forward.
+- **Stale token** → `409` with `{ "message": "...", "feature": { ...current state... } }`; nothing is written.
+- **Stale token, but the body equals the stored state** → `200` with the current feature, not `409`: the
+  state you asked for is already stored, so nothing is lost. Nothing is written and `updatedAt` does not move.
+- **Token without `Z`, or with an offset** → `400`; nothing is written.
+- **No token** → last write wins, as before. A body that equals the stored state no longer advances
+  `updatedAt` (nothing is written).
+
+`DELETE` returns `409` instead of a server error when the feature changes while the delete is in progress.
+
+### 5. Filters combine with OR
+
+An enabled feature with several filters is on when **any** filter passes (`RequirementType.Any`); a disabled
+feature is off whatever its filters say, and an enabled feature without filters is always on. So, on a
+feature that already has filters, adding another can only widen who gets it.
+
+Filter parameters are validated against the registered filter's settings type on every create and update
+(unknown properties, including wrong casing, are refused). For a registered filter type, `parameters`
+longer than 4000 characters (the column size) are refused with `400`. Null or empty parameters are
+accepted as before.
+
+### 6. Reading and writing features from code: `IFeatureFlagStore`
+
+`AddFeaturesDashboard(...)` registers `IFeatureFlagStore`, the supported way for application code to change
+stored features. It goes through the same write path, validation and concurrency check as the dashboard.
+
+```csharp
+public sealed class EnableForUser(IFeatureFlagStore store)
+{
+    public async Task<bool> TryAsync(string featureName, FeatureFilterDto filter, CancellationToken ct)
+    {
+        var feature = await store.FindFeatureAsync(featureName, ct);
+        if (feature is null) return false;
+
+        var requested = feature with { Filters = [.. feature.Filters!, filter] };
+        if (store.ValidateFeature(requested).Cancel) return false;      // preview, writes nothing
+
+        var result = await store.UpdateFeatureAsync(requested, ct);    // compare-and-set on UpdatedAt
+        return result.Status is FeatureFlagUpdateStatus.Updated or FeatureFlagUpdateStatus.Unchanged;
+        // On Conflict, result.Feature is the current state: re-plan from it and try again.
+    }
+}
+```
+
+- `FindFeatureAsync` / `ListFeaturesAsync` return filters in the order they were written, and UTC timestamps.
+- `UpdateFeatureAsync(feature)` replaces `IsEnabled`, `Description`, `Application` and `Filters` only if the
+  stored `UpdatedAt` still equals `feature.UpdatedAt`. Its `FeatureFlagUpdateResult.Status` is one of:
+  - `Updated` — written; `UpdatedAt` moved strictly forward (even if clocks differ between writers).
+  - `Unchanged` — the requested state already equals the stored state (fields and the ordered filter list,
+    compared exactly). Nothing is written and `UpdatedAt` does not move. **This is checked before the
+    token**, so a stale `UpdatedAt` with an already-stored state returns `Unchanged`, not `Conflict`.
+  - `Conflict` — another writer changed the feature first; nothing is written and `Feature` is the current state.
+  - `Rejected` — validation refused it (including your `OnFeatureChanging` validator); `Message` says why.
+  - `NotFound` — no feature with that name.
+- **Arguments:** `UpdatedAt` must be the UTC value you read (null or non-UTC throws `ArgumentException`), and
+  `Filters` must not be null (it throws; pass an empty list to remove every filter on purpose).
+- `ValidateFeature(feature)` runs exactly the validation `UpdateFeatureAsync` runs, as an update, and writes
+  nothing.

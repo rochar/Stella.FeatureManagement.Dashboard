@@ -7,6 +7,10 @@ internal sealed class FeatureChangeValidation(
     IFeatureFilterRepository filterRepository,
     ILogger<FeatureChangeValidation> logger) : IFeatureChangeValidation
 {
+    // Mirrors the varchar(4000) FeatureFilters.Parameters column: rejecting here turns what would be
+    // an unhandled database error (a 500) into a validation message.
+    internal const int MaxFilterParametersLength = 4000;
+
     private readonly System.Text.Json.JsonSerializerOptions _options = new()
     {
         UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow
@@ -18,7 +22,7 @@ internal sealed class FeatureChangeValidation(
     {
         logger.LogDebug("Validating {ChangeType} operation for feature {FeatureName}", changeType, featureFlag.Name);
 
-        
+
         if (changeType != FeatureChangeType.Delete && (featureFlag.Filters is not null and { Count: > 0 }))
         {
             foreach (var filter in featureFlag.Filters)
@@ -28,6 +32,15 @@ internal sealed class FeatureChangeValidation(
                 {
                     logger.LogDebug("Validating filter {FilterType} for feature {FeatureName}", filter.FilterType,
                         featureFlag.Name);
+
+                    if (filter.Parameters is { Length: > MaxFilterParametersLength })
+                    {
+                        logger.LogWarning(
+                            "Feature {FeatureName} filter {FilterType} parameters exceed {MaxLength} characters",
+                            featureFlag.Name, filter.FilterType, MaxFilterParametersLength);
+                        return new FeatureChangeValidationResult(true,
+                            $"{featureFlag.Name} filter parameters for {filter.FilterType} exceed {MaxFilterParametersLength} characters.");
+                    }
 
                     try
                     {

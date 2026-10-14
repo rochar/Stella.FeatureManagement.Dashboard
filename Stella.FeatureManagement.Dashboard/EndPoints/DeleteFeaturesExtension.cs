@@ -34,15 +34,27 @@ internal static class DeleteFeaturesExtension
                     logger.LogWarning("Delete operation cancelled for feature {FeatureName}: {CancellationMessage}", featureName, canProceed.CancellationMessage);
                     return Results.BadRequest(canProceed.CancellationMessage);
                 }
-                    
 
-                await DeleteFeature(context, feature);
+
+                try
+                {
+                    await DeleteFeature(context, feature);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    logger.LogWarning("Delete of feature {FeatureName} conflicted with a concurrent change", featureName);
+                    return Results.Conflict(new
+                    {
+                        message = $"Feature '{featureName}' was changed by another writer; reload it before deleting."
+                    });
+                }
 
                 return Results.NoContent();
             })
             .Produces(204)
             .Produces(404)
-            .Produces(400);
+            .Produces(400)
+            .Produces(409);
 
         return routeGroup;
     }

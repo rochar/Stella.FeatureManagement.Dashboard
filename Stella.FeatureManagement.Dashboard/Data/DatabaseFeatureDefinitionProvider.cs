@@ -45,9 +45,12 @@ internal class DatabaseFeatureDefinitionProvider : IFeatureDefinitionProvider
 
     private static FeatureDefinition CreateFeatureDefinition(FeatureFlag feature)
     {
+        // Any is also Microsoft.FeatureManagement's default; it is set explicitly because consumers
+        // (e.g. adding one id to a targeting filter) rely on OR and must not inherit a changed default.
         var definition = new FeatureDefinition
         {
-            Name = feature.Name
+            Name = feature.Name,
+            RequirementType = RequirementType.Any
         };
 
         // Feature is disabled - return empty filters (feature always off)
@@ -64,7 +67,7 @@ internal class DatabaseFeatureDefinitionProvider : IFeatureDefinitionProvider
             return definition;
         }
 
-        // Has filters - all must pass (AND logic is handled by FeatureManager)
+        // Has filters - any filter that passes enables the feature (OR; RequirementType.Any)
         var filterConfigs = feature.Filters.Select(filter =>
         {
             var configurationBuilder = new ConfigurationBuilder();

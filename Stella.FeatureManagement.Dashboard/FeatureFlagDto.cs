@@ -34,6 +34,8 @@ public record FeatureFilterDto(string FilterType, string? Parameters);
 /// <summary>
 /// The single <see cref="FeatureFlag"/> to <see cref="FeatureFlagDto"/> mapping, usable both inside
 /// EF Core queries (<see cref="AsDto"/>) and on loaded entities (<see cref="ToDto"/>).
+/// Filters are ordered by <see cref="FeatureFilter.Id"/> (insertion order), so the order a writer
+/// compares against is stable rather than whatever the database happens to return.
 /// </summary>
 internal static class FeatureFlagMapping
 {
@@ -41,7 +43,8 @@ internal static class FeatureFlagMapping
         f.Name,
         f.IsEnabled,
         f.Description,
-        f.Filters.Select(filter => new FeatureFilterDto(filter.FilterType, filter.Parameters)).ToList(),
+        f.Filters.OrderBy(filter => filter.Id)
+            .Select(filter => new FeatureFilterDto(filter.FilterType, filter.Parameters)).ToList(),
         f.Application)
     {
         CreatedAt = f.CreatedAt,

@@ -2,12 +2,16 @@
 using Shouldly;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace Stella.FeatureManagement.Dashboard.Tests;
 
 public class PutFeaturesEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
 {
     private readonly HttpClient _client = webApp.CreateClient();
+    private readonly IServiceProvider _services = webApp.Services;
+
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Theory]
     [InlineData("AnotherFlag")]
@@ -225,5 +229,141 @@ public class PutFeaturesEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
         // Assert
         result.ShouldBe(expectedResult);
     }
+
+    [Fact]
+    public async Task WhenPutCarriesStaleExpectedUpdatedAtItReturnsConflictWithCurrentFeature()
+    {
+        var original = await CreateAsync("PutStale");
+        var first = await PutAsync(original.Name, new { IsEnabled = true, ExpectedUpdatedAt = original.UpdatedAt });
+        first.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var current = await first.Content.ReadFromJsonAsync<FeatureStateResponse>(Ct);
+
+        var response = await PutAsync(original.Name,
+            new { IsEnabled = false, Description = "stale edit", ExpectedUpdatedAt = original.UpdatedAt });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var body = await response.Content.ReadFromJsonAsync<ConflictResponse>(Ct);
+        body.ShouldNotBeNull();
+        body.Message.ShouldNotBeNullOrWhiteSpace();
+        body.Feature.ShouldNotBeNull();
+        body.Feature.IsEnabled.ShouldBeTrue();
+        body.Feature.Description.ShouldBeNull();
+        body.Feature.UpdatedAt.ShouldBe(current!.UpdatedAt);
+        (await GetAsync(original.Name)).UpdatedAt.ShouldBe(current.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task WhenPutCarriesCurrentExpectedUpdatedAtItUpdates()
+    {
+        var original = await CreateAsync("PutCurrent");
+
+        var response = await PutAsync(original.Name,
+            new { IsEnabled = true, Description = "current edit", ExpectedUpdatedAt = original.UpdatedAt });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var stored = await GetAsync(original.Name);
+        stored.IsEnabled.ShouldBeTrue();
+        stored.Description.ShouldBe("current edit");
+        stored.UpdatedAt!.Value.ShouldBeGreaterThan(original.UpdatedAt!.Value);
+    }
+
+    [Fact]
+    public async Task WhenPutOmitsExpectedUpdatedAtItReplacesAsBefore()
+    {
+        var original = await CreateAsync("PutTokenless");
+        (await PutAsync(original.Name, new { IsEnabled = true, Description = "first" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Built from the original read, which is now stale: without a token the last write still wins.
+        var response = await PutAsync(original.Name, new { IsEnabled = false, Description = "second" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var stored = await GetAsync(original.Name);
+        stored.IsEnabled.ShouldBeFalse();
+        stored.Description.ShouldBe("second");
+    }
+
+    [Theory]
+    [InlineData("NoZoneDesignator", "2026-10-14T10:00:00.123456")]
+    [InlineData("Offset", "2026-10-14T10:00:00.123456+02:00")]
+    public async Task WhenPutCarriesNonUtcExpectedUpdatedAtItReturnsBadRequest(string tokenCase, string token)
+    {
+        var original = await CreateAsync($"PutBadToken{tokenCase}");
+
+        var response = await PutAsync(original.Name,
+            new { IsEnabled = true, Description = "never written", ExpectedUpdatedAt = token });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var stored = await GetAsync(original.Name);
+        stored.IsEnabled.ShouldBeFalse();
+        stored.Description.ShouldBeNull();
+        stored.UpdatedAt.ShouldBe(original.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task WhenUpdatedAtRoundTripsThroughJsonMicrosecondsArePreserved()
+    {
+        var original = await CreateAsync("PutRoundTrip");
+        // A first write leaves an UpdatedAt with sub-millisecond digits on the wire.
+        (await PutAsync(original.Name, new { IsEnabled = true })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var json = await _client.GetStringAsync($"{WebApp.ApiBaseUrl}/features/{original.Name}", Ct);
+        using var document = JsonDocument.Parse(json);
+        var token = document.RootElement.GetProperty("updatedAt").GetString();
+
+        var response = await PutAsync(original.Name,
+            new { IsEnabled = false, Description = "round trip", ExpectedUpdatedAt = token });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await GetAsync(original.Name)).Description.ShouldBe("round trip");
+    }
+
+    [Fact]
+    public async Task WhenPutEqualsStoredStateWithStaleExpectedUpdatedAtItReturnsOkNotConflict()
+    {
+        var original = await CreateAsync("PutUnchanged");
+        var first = await PutAsync(original.Name,
+            new { IsEnabled = true, Description = "stored", ExpectedUpdatedAt = original.UpdatedAt });
+        var current = await first.Content.ReadFromJsonAsync<FeatureStateResponse>(Ct);
+
+        var response = await PutAsync(original.Name,
+            new { IsEnabled = true, Description = "stored", ExpectedUpdatedAt = original.UpdatedAt });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<FeatureStateResponse>(Ct);
+        body!.UpdatedAt.ShouldBe(current!.UpdatedAt);
+        (await GetAsync(original.Name)).UpdatedAt.ShouldBe(current.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task WhenTheClockHasNotMovedTokenlessPutStillAdvancesUpdatedAt()
+    {
+        var original = await CreateAsync("PutClock");
+        var ahead = await FeatureFlagStoreTests.MoveUpdatedAtAheadOfNowAsync(_services, original.Name);
+
+        var response = await PutAsync(original.Name, new { IsEnabled = true });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<FeatureStateResponse>(Ct);
+        body!.UpdatedAt.ShouldBe(ahead.AddTicks(TimeSpan.TicksPerMicrosecond));
+        (await GetAsync(original.Name)).UpdatedAt.ShouldBe(body.UpdatedAt);
+    }
+
+    private async Task<FeatureStateResponse> CreateAsync(string prefix)
+    {
+        var name = $"{prefix}_{Guid.NewGuid():N}";
+        var response = await _client.PostAsJsonAsync($"{WebApp.ApiBaseUrl}/features",
+            new { Name = name, IsEnabled = false }, Ct);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        return (await response.Content.ReadFromJsonAsync<FeatureStateResponse>(Ct))!;
+    }
+
+    private Task<HttpResponseMessage> PutAsync(string featureName, object body) =>
+        _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/{featureName}", body, Ct);
+
+    private async Task<FeatureStateResponse> GetAsync(string featureName) =>
+        (await _client.GetFromJsonAsync<FeatureStateResponse>($"{WebApp.ApiBaseUrl}/features/{featureName}", Ct))!;
+
+    private sealed record ConflictResponse(string? Message, FeatureStateResponse? Feature);
 
 }
