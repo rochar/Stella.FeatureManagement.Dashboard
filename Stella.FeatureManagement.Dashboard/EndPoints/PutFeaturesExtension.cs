@@ -15,17 +15,23 @@ internal static class PutFeaturesExtension
         routeGroup.MapPut("{featureName}", async (
                 string featureName,
                 UpdateFeatureRequest request,
-                IFeatureChangeValidation featureChangeValidation,
+                FeatureFlagUpdater updater,
                 IDbContextFactory<FeatureFlagDbContext> contextFactory,
-                ILogger<FeatureFlagDbContext> logger) =>
+                ILogger<FeatureFlagDbContext> logger,
+                CancellationToken cancellationToken) =>
             {
                 logger.LogInformation("Received update request for feature {FeatureName}", featureName);
 
-                await using var context = await contextFactory.CreateDbContextAsync();
+                // Npgsql refuses a non-UTC DateTime for timestamptz, so it must be refused before EF sees it.
+                if (request.ExpectedUpdatedAt is { Kind: not DateTimeKind.Utc })
+                    return Results.BadRequest(new
+                    {
+                        message = "expectedUpdatedAt must be a UTC timestamp ending in 'Z', as returned by the API."
+                    });
 
-                var feature = await context.FeatureFlags
-                    .Include(f => f.Filters)
-                    .FirstOrDefaultAsync(f => f.Name == featureName);
+                await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+
+                var feature = await FeatureFlagUpdater.LoadAsync(context, featureName, cancellationToken);
 
                 if (feature is null)
                 {
@@ -33,52 +39,35 @@ internal static class PutFeaturesExtension
                     return Results.NotFound(new { message = $"Feature '{featureName}' not found." });
                 }
 
-                var canProceed = featureChangeValidation.CanProceed(request.ToDto(feature), FeatureChangeType.Update);
+                var result = await updater.UpdateAsync(context, feature, request.ToDto(feature),
+                    request.ExpectedUpdatedAt, cancellationToken);
 
-                if (canProceed.Cancel)
+                switch (result.Status)
                 {
-                    logger.LogWarning("Update operation cancelled for feature {FeatureName}: {CancellationMessage}", featureName, canProceed.CancellationMessage);
-                    return Results.BadRequest(canProceed.CancellationMessage);
+                    case FeatureFlagUpdateStatus.Updated:
+                        logger.LogInformation("Feature {FeatureName} updated successfully with IsEnabled={IsEnabled}", featureName, request.IsEnabled);
+                        return Results.Ok(result.Feature);
+                    case FeatureFlagUpdateStatus.Unchanged:
+                        return Results.Ok(result.Feature);
+                    case FeatureFlagUpdateStatus.Rejected:
+                        logger.LogWarning("Update operation cancelled for feature {FeatureName}: {CancellationMessage}", featureName, result.Message);
+                        return Results.BadRequest(result.Message);
+                    case FeatureFlagUpdateStatus.Conflict:
+                        logger.LogWarning("Update of feature {FeatureName} conflicted with a concurrent change", featureName);
+                        return Results.Conflict(new { message = result.Message, feature = result.Feature });
+                    case FeatureFlagUpdateStatus.NotFound:
+                        // Deleted between this request's load and its save.
+                        return Results.NotFound(new { message = result.Message });
+                    default:
+                        throw new InvalidOperationException($"Unhandled update status {result.Status}.");
                 }
-
-                var result = await UpdateFeature(feature, request, context);
-                logger.LogInformation("Feature {FeatureName} updated successfully with IsEnabled={IsEnabled}", featureName, request.IsEnabled);
-                return Results.Ok(result);
             })
             .Produces<FeatureFlagDto>(200)
             .Produces(404)
-            .Produces(400);
+            .Produces(400)
+            .Produces(409);
 
         return routeGroup;
-    }
-
-    private static async Task<FeatureFlagDto> UpdateFeature(FeatureFlag feature, UpdateFeatureRequest request,
-        FeatureFlagDbContext context)
-    {
-        feature.IsEnabled = request.IsEnabled;
-        feature.Description = request.Description;
-        feature.UpdatedAt = FeatureFlag.UtcNowForStorage();
-
-        if (request.Application is not null)
-            feature.Application = request.Application;
-
-        // Clear existing filters and add new ones if provided
-        feature.Filters.Clear();
-        if (request.Filters is not null)
-        {
-            foreach (var filter in request.Filters)
-            {
-                feature.Filters.Add(new FeatureFilter
-                {
-                    FilterType = filter.FilterType,
-                    Parameters = filter.Parameters
-                });
-            }
-        }
-
-        await context.SaveChangesAsync();
-
-        return feature.ToDto();
     }
 }
 
@@ -89,7 +78,9 @@ internal static class PutFeaturesExtension
 /// <param name="Description">Optional description of the feature.</param>
 /// <param name="Filters">Optional filter configurations for the feature.</param>
 /// <param name="Application">The application this feature belongs to.</param>
-internal record UpdateFeatureRequest(bool IsEnabled, string? Description = null, List<FeatureFilterDto>? Filters = null, string? Application = null)
+/// <param name="ExpectedUpdatedAt">The feature's <c>updatedAt</c> the edit started from (UTC). When set, the
+/// update applies only if it is still current (409 otherwise); when omitted, the last write wins.</param>
+internal record UpdateFeatureRequest(bool IsEnabled, string? Description = null, List<FeatureFilterDto>? Filters = null, string? Application = null, DateTime? ExpectedUpdatedAt = null)
 {
     public FeatureFlagDto ToDto(FeatureFlag current)
     {

@@ -38,18 +38,19 @@ No separate lint step: analyzer/style checks run in `dotnet build` (`EnforceCode
 
 ## Architecture
 
-- **Registration**: `ServiceCollectionExtensions.AddFeaturesDashboard(...)` builds a `FeatureManagerDashboardBuilder` that wires `FeatureFlagDbContext`, `DatabaseFeatureDefinitionProvider`, `DashboardInitializer`, `FeatureChangeValidation`, `ManagedFeatureRegistration`, and the in-memory `FeatureFilterRepository`.
+- **Registration**: `ServiceCollectionExtensions.AddFeaturesDashboard(...)` builds a `FeatureManagerDashboardBuilder` that wires `FeatureFlagDbContext`, `DatabaseFeatureDefinitionProvider`, `DashboardInitializer`, `FeatureChangeValidation`, `ManagedFeatureRegistration`, the in-memory `FeatureFilterRepository`, the internal `FeatureFlagUpdater`, and the public `IFeatureFlagStore` (`FeatureFlagStore`, `TryAddSingleton`) for consumer code.
 - **Routing**: `EndpointRouteBuilderExtensions.UseFeaturesDashboard(...)` is the runtime entry point; route groups are composed in `FeatureManagerDashboardAppBuilder.UseFeaturesDashboard`:
   - `/features/{featureName}` — feature state via `Microsoft.FeatureManagement` (optional CORS and rate-limiting policy)
   - `/features/dashboard` — the embedded React SPA
   - `/features/dashboardapi/features`, `/filters`, `/applications` — dashboard CRUD/support APIs
-- **DB → FeatureManagement**: `DatabaseFeatureDefinitionProvider` maps disabled features to `EnabledFor = []`, enabled without filters to `AlwaysOn`, and enabled with filters to `FeatureFilterConfiguration` built from stored JSON.
+- **DB → FeatureManagement**: `DatabaseFeatureDefinitionProvider` maps disabled features to `EnabledFor = []`, enabled without filters to `AlwaysOn`, and enabled with filters to `FeatureFilterConfiguration` built from stored JSON, with `RequirementType.Any` set explicitly (filters combine with OR).
 - **Evaluation context**: `GetFeaturesFromFeatureManager` copies the request query string into `HttpContext.Items`, exposed to filters via the singleton `IFeatureEvaluationRequestContext` (case-insensitive). This is how custom filters get per-request parameters.
 - **Data**: `FeatureFlagDbContext` uses PostgreSQL schema `features`. `FeatureFlag` owns `FeatureFilter` rows (cascade delete); `Application` defaults to `"Default"`. Migrations are in `Data/Migrations`.
 
 ## Constraints
 
 - Use `IDbContextFactory<FeatureFlagDbContext>` in endpoints and services — never inject a scoped `FeatureFlagDbContext` into request handlers.
+- `FeatureFlagUpdater` is the only writer that updates an existing feature: the dashboard PUT and `IFeatureFlagStore.UpdateFeatureAsync` both go through it (validation, state comparison, the `UpdatedAt` concurrency token, filter replacement). `FeatureFlag.UpdatedAt` is an EF concurrency token; every write must move it strictly forward. See `docs/adrs/ADR-20261014-optimistic-concurrency-writes.md`.
 - New endpoints are Minimal API extension classes in `EndPoints\*Extension.cs`, wired in `FeatureManagerDashboardAppBuilder.UseFeaturesDashboard`.
 - UI/API path contract is `/features/dashboardapi/...`. The React app uses relative paths (`../dashboardapi/features`) unless Aspire sets `VITE_API_URL`.
 - Consumer startup order (see `Example.Api/Program.cs`): `AddFeaturesDashboard(...)` → `UseFeaturesDashboard(...)` → `MigrateFeaturesDatabaseAsync()` → `RegisterManagedFeaturesAsync(...)`.

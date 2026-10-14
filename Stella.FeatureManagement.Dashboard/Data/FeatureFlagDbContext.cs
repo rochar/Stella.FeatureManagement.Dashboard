@@ -44,6 +44,10 @@ internal class FeatureFlagDbContext : DbContext
 
             entity.Property(e => e.Application).HasMaxLength(256).IsRequired().HasDefaultValue("Default");
 
+            // Every write moves UpdatedAt strictly forward, so it doubles as the optimistic-concurrency
+            // token without a dedicated column (and without a migration).
+            entity.Property(e => e.UpdatedAt).IsConcurrencyToken();
+
             entity.HasMany(e => e.Filters)
                 .WithOne(f => f.FeatureFlag)
                 .HasForeignKey(f => f.FeatureFlagId)

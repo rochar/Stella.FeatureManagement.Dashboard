@@ -27,13 +27,15 @@ public class FeatureManagerDashboardBuilder : IFeatureManagerDashboardBuilder
     {
         var logger = serviceCollection.BuildServiceProvider().GetService<ILogger<FeatureFilterRepository>>();
         _filterRepository = new FeatureFilterRepository(logger);
-        
+
         _builder = serviceCollection.AddFeatureManagement();
         _builder.Services.AddDbContextFactory<FeatureFlagDbContext>(configureDbContext);
         _builder.Services.AddSingleton<IFeatureDefinitionProvider, DatabaseFeatureDefinitionProvider>();
         _builder.Services.AddSingleton<IDashboardInitializer, DashboardInitializer>();
         _builder.Services.AddSingleton<IManagedFeatureRegistration, ManagedFeatureRegistration>();
         _builder.Services.AddSingleton<IFeatureChangeValidation, FeatureChangeValidation>();
+        _builder.Services.AddSingleton<FeatureFlagUpdater>();
+        _builder.Services.TryAddSingleton<IFeatureFlagStore, FeatureFlagStore>();
         _builder.Services.AddSingleton<IFeatureFilterRepository>(_filterRepository);
         _builder.Services.AddHttpContextAccessor();
         _builder.Services.AddSingleton<IFeatureEvaluationRequestContext, FeatureEvaluationRequestContext>();
@@ -44,10 +46,10 @@ public class FeatureManagerDashboardBuilder : IFeatureManagerDashboardBuilder
         _builder.Services.AddSingleton<IFeatureUsageRecorder, FeatureUsageRecorder>();
         _builder.Services.AddHostedService<FeatureUsageFlushService>();
 
-        _filterRepository.AddFilter<PercentageFilter>(new PercentageFilterSettings(){Value = 50});
-        _filterRepository.AddFilter<TimeWindowFilter>(new TimeWindowFilterSettings(){Start = DateTime.UtcNow,End = DateTime.UtcNow.AddDays(1)});
+        _filterRepository.AddFilter<PercentageFilter>(new PercentageFilterSettings() { Value = 50 });
+        _filterRepository.AddFilter<TimeWindowFilter>(new TimeWindowFilterSettings() { Start = DateTime.UtcNow, End = DateTime.UtcNow.AddDays(1) });
     }
-    
+
     /// <inheritdoc />
     public IFeatureManagerDashboardBuilder AddFeatureFilter<T>(object defaultSettings) where T : IFeatureFilterMetadata
     {

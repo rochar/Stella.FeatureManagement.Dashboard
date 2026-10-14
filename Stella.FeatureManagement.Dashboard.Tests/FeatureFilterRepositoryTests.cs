@@ -12,7 +12,7 @@ public class FeatureFilterRepositoryTests
     {
         // Arrange
         var services = new ServiceCollection();
-        
+
         // Act
         var builder = services.AddFeaturesDashboard(options => { });
         builder.AddFeatureFilter<TestFilter>(new { });
@@ -20,12 +20,12 @@ public class FeatureFilterRepositoryTests
         // Assert
         var serviceProvider = services.BuildServiceProvider();
         var repository = serviceProvider.GetRequiredService<IFeatureFilterRepository>();
-        
+
         var filters = repository.GetFilters();
         filters.ShouldContain(f => f.Type == typeof(TestFilter));
     }
 
-    private class TestFilter : IFeatureFilterMetadata
+    private sealed class TestFilter : IFeatureFilterMetadata
     {
     }
 }

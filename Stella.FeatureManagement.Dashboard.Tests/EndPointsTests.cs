@@ -1,4 +1,7 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.FeatureManagement;
 using Shouldly;
+using Stella.FeatureManagement.Dashboard.Data;
 using System.Net;
 using System.Net.Http.Json;
 
@@ -7,6 +10,8 @@ namespace Stella.FeatureManagement.Dashboard.Tests;
 public class GetFeaturesEndPointTests(WebApp webApp) : IClassFixture<WebApp>
 {
     private readonly HttpClient _client = webApp.CreateClient();
+    private readonly DatabaseFeatureDefinitionProvider _definitionProvider = webApp.Services
+        .GetServices<IFeatureDefinitionProvider>().OfType<DatabaseFeatureDefinitionProvider>().Single();
 
     [Fact]
     public async Task WhenGetFeatureWithPercentageFilterFromFeatureManager()
@@ -85,5 +90,28 @@ public class GetFeaturesEndPointTests(WebApp webApp) : IClassFixture<WebApp>
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("text/css");
+    }
+
+    [Fact]
+    public async Task WhenOnlyOneOfTwoFiltersPassesFeatureIsEnabled()
+    {
+        // Without an "id" query parameter TestFilter passes only when its Ids contain 2. The failing filter
+        // comes first, so neither AND nor "first filter decides" would enable the feature.
+        var ct = TestContext.Current.CancellationToken;
+        var featureName = $"FeatureOr_{Guid.NewGuid():N}";
+        (await _client.PostAsJsonAsync($"{WebApp.ApiBaseUrl}/features",
+            new
+            {
+                Name = featureName,
+                IsEnabled = true,
+                Filters = new[] { FeatureFlagStoreTests.TestFilterIds(1), FeatureFlagStoreTests.TestFilterIds(2) }
+            }, ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var response = await _client.GetAsync($"features/{featureName}", ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        bool.Parse(await response.Content.ReadAsStringAsync(ct)).ShouldBeTrue();
+        var definition = await _definitionProvider.GetFeatureDefinitionAsync(featureName);
+        definition!.RequirementType.ShouldBe(RequirementType.Any);
     }
 }

@@ -55,5 +55,6 @@ public class WebApp : WebApplicationFactory<Program>, IAsyncLifetime
     {
         await _postgresContainer.DisposeAsync();
         await base.DisposeAsync();
+        GC.SuppressFinalize(this);
     }
 }

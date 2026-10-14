@@ -18,7 +18,7 @@ public class GetFilterTests(WebApp webApp) : IClassFixture<WebApp>
         // Assert
         response.EnsureSuccessStatusCode();
         var filters = await response.Content.ReadFromJsonAsync<List<FilterDto>>(TestContext.Current.CancellationToken);
-        
+
         filters.ShouldNotBeNull();
         var percentageFilter = filters.Single(f => f.Name == "Microsoft.Percentage");
         percentageFilter.DefaultSettings.ShouldNotBeNull();
@@ -34,7 +34,7 @@ public class GetFilterTests(WebApp webApp) : IClassFixture<WebApp>
         // Assert
         response.EnsureSuccessStatusCode();
         var filters = await response.Content.ReadFromJsonAsync<List<FilterDto>>(TestContext.Current.CancellationToken);
-        
+
         filters.ShouldNotBeNull();
         var testFilter = filters.Single(f => f.Name == "TestFilter");
         testFilter.DefaultSettings.ShouldNotBeNull();
