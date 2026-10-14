@@ -107,7 +107,9 @@ The `/features/{featureName}` endpoint returns a boolean feature state. The `/fe
 
 #### Updating a feature: `PUT /features/dashboardapi/features/{featureName}`
 
-The body replaces `isEnabled`, `description`, `filters` and (when sent) `application`. Add the optional
+The body replaces `isEnabled`, `description`, `filters` and (when sent) `application`. A body that omits
+`filters` (or sends `null`) clears every filter of the feature, so always send the full list you want to keep.
+This is unchanged behaviour; `IFeatureFlagStore` refuses null `Filters` instead. Add the optional
 `expectedUpdatedAt` to make the write a compare-and-set: send the `updatedAt` you read when the edit began,
 exactly as the API returned it (UTC, ending in `Z`).
 
@@ -115,7 +117,10 @@ exactly as the API returned it (UTC, ending in `Z`).
 - **Stale token** → `409` with `{ "message": "...", "feature": { ...current state... } }`; nothing is written.
 - **Stale token, but the body equals the stored state** → `200` with the current feature, not `409`: the
   state you asked for is already stored, so nothing is lost. Nothing is written and `updatedAt` does not move.
-- **Token without `Z`, or with an offset** → `400`; nothing is written.
+- **Token without `Z`, or with an offset** → `400` with `{ "message": "..." }`; nothing is written.
+- **Validation refused** (filter parameters that do not match the filter's settings type, over 4000
+  characters, or a custom `OnFeatureChanging` rule) → `400` whose body is a bare JSON string holding the
+  message, not an object; nothing is written.
 - **No token** → last write wins, as before. A body that equals the stored state no longer advances
   `updatedAt` (nothing is written).
 
