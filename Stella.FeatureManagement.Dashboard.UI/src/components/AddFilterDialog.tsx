@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent } from 'react'
-import { errorDetail, type FeatureState } from '../api'
+import { errorDetail, isConflict, type FeatureState } from '../api'
 import type { FeaturesStore } from '../hooks/useFeatures'
 import { compactJson, formatJson, safeParse } from '../json'
 import { Button } from './Button'
@@ -30,17 +30,23 @@ export function AddFilterDialog({ feature, store, onClose }: { feature: FeatureS
     e.preventDefault()
     const parameters = compactJson(params)
     if (!selected || parameters === null || saving) return
-    // Always read the live copy so filters added meanwhile aren't dropped by the whole-feature PUT.
-    const current = store.features.find(f => f.name === feature.name) ?? feature
+    // Read the latest stored copy so filters added meanwhile aren't dropped by the whole-feature PUT. The new
+    // filter does not depend on the rest of the feature, so this dialog has no older base to keep; the
+    // body and the token just have to come from this one copy, so anything newer on the server conflicts.
+    const current = store.storedCopy(feature)
 
     setSaving(true)
     setServerError(null)
     try {
-      await store.updateFeature(current, { filters: [...current.filters, { filterType: selected.name, parameters }] }, 'Failed to add filter')
+      await store.updateFeature(current, { filters: [...current.filters, { filterType: selected.name, parameters }] }, current.updatedAt ?? null, 'Failed to add filter')
       toast.success(`${selected.name} filter added to “${feature.name}”`)
       onClose()
     } catch (err) {
-      setServerError(errorDetail(err, 'Failed to add filter'))
+      // On a conflict the store now holds the stored copy, so the dialog stays open with the user's
+      // filter intact and the next submit is built from that copy.
+      setServerError(isConflict(err)
+        ? 'Changed elsewhere — the latest version is now loaded; add the filter again to apply it to that version.'
+        : errorDetail(err, 'Failed to add filter'))
       setSaving(false)
     }
   }

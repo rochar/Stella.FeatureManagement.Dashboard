@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent } from 'react'
-import { errorDetail, type FeatureState } from '../api'
+import { CHANGED_ELSEWHERE, errorDetail, isConflict, type FeatureState } from '../api'
 import type { FeaturesStore } from '../hooks/useFeatures'
 import { Button } from './Button'
 import { Dialog } from './Dialog'
@@ -25,8 +25,10 @@ export function FeatureFormDialog(props: Props) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Always read the live copy: a toggle in the list may have changed it since the dialog opened.
-  const current = editing ? store.features.find(f => f.name === editing.name) ?? editing : null
+  // The version the form was seeded from, never the live copy: its filters and token go into the PUT,
+  // so a change made elsewhere since the dialog opened (a grant appended to a filter, a Refresh)
+  // conflicts instead of being overwritten by the filters this dialog never showed.
+  const [current, setCurrent] = useState<FeatureState | null>(editing)
   const trimmedDescription = description.trim() || null
   const unchanged = !!current
     && trimmedDescription === (current.description?.trim() || null)
@@ -62,11 +64,22 @@ export function FeatureFormDialog(props: Props) {
     if (toggleInFlight) return
     setSaving(true)
     try {
-      await store.updateFeature(current, { application, description: trimmedDescription, isEnabled }, 'Failed to update feature')
+      await store.updateFeature(current, { application, description: trimmedDescription, isEnabled }, current.updatedAt ?? null, 'Failed to update feature')
       toast.success(`Changes to “${current.name}” saved`)
       onClose()
     } catch (err) {
-      setError(errorDetail(err, 'Failed to update feature'))
+      if (isConflict(err)) {
+        // Re-seed from the stored copy and adopt it as the base; keeping the old field values with the
+        // fresh token would let the next Save silently undo the change that caused the conflict.
+        const stored = err.serverFeature
+        setCurrent(stored)
+        setApplication(stored.application)
+        setDescription(stored.description ?? '')
+        setIsEnabled(stored.isEnabled)
+        setError(CHANGED_ELSEWHERE)
+      } else {
+        setError(errorDetail(err, 'Failed to update feature'))
+      }
       setSaving(false)
     }
   }

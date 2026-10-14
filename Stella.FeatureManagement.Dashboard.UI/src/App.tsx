@@ -1,5 +1,5 @@
 import { useCallback, useId, useState } from 'react'
-import { errorMessage, type FeatureState } from './api'
+import { errorMessage, isConflict, type FeatureState } from './api'
 import { AddFilterDialog } from './components/AddFilterDialog'
 import { Button, IconButton } from './components/Button'
 import { ConfirmDialog } from './components/Dialog'
@@ -17,7 +17,9 @@ type FeatureDialog =
   | { kind: 'edit'; name: string }
   | { kind: 'delete'; name: string }
   | { kind: 'addFilter'; name: string }
-  | { kind: 'deleteFilter'; name: string; index: number; filterType: string }
+  // `base` is the version the confirmation was opened on: the removal is built from it and sends its
+  // token, so a filter changed or added elsewhere meanwhile conflicts instead of being dropped.
+  | { kind: 'deleteFilter'; name: string; index: number; filterType: string; base: FeatureState }
   | { kind: 'usage'; name: string }
 
 export default function App() {
@@ -50,7 +52,7 @@ function Dashboard() {
     .sort((a, b) => a.name.localeCompare(b.name))
   const enabledCount = scoped.filter(f => f.isEnabled).length
 
-  const runDelete = async (action: () => Promise<unknown>, success: string, failure: string) => {
+  const runDelete = async (action: () => Promise<unknown>, success: string, failure: string, conflictMessage?: string) => {
     setDeleting(true)
     setDeleteError(null)
     try {
@@ -58,7 +60,14 @@ function Dashboard() {
       toast.success(success)
       closeDialog()
     } catch (err) {
-      setDeleteError(errorMessage(err, failure))
+      // A confirmation has no draft to rebase: what it asked about may no longer exist, so close it
+      // (the list now shows the stored version) rather than offer to confirm against a newer one.
+      if (conflictMessage && isConflict(err)) {
+        closeDialog()
+        toast.error(conflictMessage)
+      } else {
+        setDeleteError(errorMessage(err, failure))
+      }
     } finally {
       setDeleting(false)
     }
@@ -73,15 +82,11 @@ function Dashboard() {
     'Failed to delete feature'
   )
 
-  const confirmDeleteFilter = (name: string, index: number, filterType: string) => runDelete(
-    async () => {
-      const feature = findFeature(name)
-      // Don't report success for a removal that never happened.
-      if (feature?.filters[index]?.filterType !== filterType) throw new Error('This filter no longer exists. Refresh and try again.')
-      await store.updateFeature(feature, { filters: feature.filters.filter((_, i) => i !== index) }, 'Failed to remove filter')
-    },
-    `${filterType} filter removed from “${name}”`,
-    'Failed to remove filter'
+  const confirmDeleteFilter = (base: FeatureState, index: number, filterType: string) => runDelete(
+    () => store.updateFeature(base, { filters: base.filters.filter((_, i) => i !== index) }, base.updatedAt ?? null, 'Failed to remove filter'),
+    `${filterType} filter removed from “${base.name}”`,
+    'Failed to remove filter',
+    `${filterType} filter was not removed: “${base.name}” changed elsewhere — showing the latest version; remove it again if you still want to.`
   )
 
   const dialogFeature = dialog && dialog.kind !== 'create' ? findFeature(dialog.name) : undefined
@@ -217,7 +222,7 @@ function Dashboard() {
                       onDelete={() => setDialog({ kind: 'delete', name: f.name })}
                       onOpenUsage={name => setDialog({ kind: 'usage', name })}
                       onAddFilter={() => setDialog({ kind: 'addFilter', name: f.name })}
-                      onDeleteFilter={index => setDialog({ kind: 'deleteFilter', name: f.name, index, filterType: f.filters[index].filterType })}
+                      onDeleteFilter={index => setDialog({ kind: 'deleteFilter', name: f.name, index, filterType: f.filters[index].filterType, base: store.storedCopy(f) })}
                     />
                   ))}
                 </ul>
@@ -239,7 +244,7 @@ function Dashboard() {
         <FeatureFormDialog mode="create" defaultApplication={selectedApplication ?? 'Default'} store={store} onClose={closeDialog} />
       )}
       {dialog?.kind === 'edit' && dialogFeature && (
-        <FeatureFormDialog mode="edit" feature={dialogFeature} store={store} onClose={closeDialog} />
+        <FeatureFormDialog mode="edit" feature={store.storedCopy(dialogFeature)} store={store} onClose={closeDialog} />
       )}
       {dialog?.kind === 'addFilter' && dialogFeature && (
         <AddFilterDialog feature={dialogFeature} store={store} onClose={closeDialog} />
@@ -262,7 +267,7 @@ function Dashboard() {
           confirmLabel="Remove filter"
           busy={deleting}
           error={deleteError}
-          onConfirm={() => confirmDeleteFilter(dialog.name, dialog.index, dialog.filterType)}
+          onConfirm={() => confirmDeleteFilter(dialog.base, dialog.index, dialog.filterType)}
           onClose={closeDialog}
         >
           The <strong>{dialog.filterType}</strong> filter will be removed from <strong>{dialog.name}</strong>.
