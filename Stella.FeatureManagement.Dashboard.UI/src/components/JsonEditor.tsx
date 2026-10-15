@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { formatJson, safeParse } from '../json'
+import { editorText, safeParse } from '../json'
 import { Button } from './Button'
 import { Icon } from './Icon'
 
@@ -22,9 +22,11 @@ export function JsonEditor({ label, value, onChange, defaults, serverError, disa
   const parsed = value.trim() ? safeParse(value) : null
   const syntaxError = parsed && !parsed.ok ? parsed.error : null
   const error = syntaxError ?? serverError ?? null
-  // Reuse the parse above instead of parsing the same text again on every keystroke.
-  const formatted = parsed?.ok ? JSON.stringify(parsed.value, null, 2) : formatJson(value)
-  const formattedDefaults = defaults != null ? formatJson(defaults) : null
+  // Reuse the parse above instead of parsing the same text again on every keystroke. A blank or invalid
+  // value formats to itself, so Format stays disabled instead of writing {} into a blank editor.
+  const formatted = parsed?.ok ? JSON.stringify(parsed.value, null, 2) : value
+  // A filter registered without defaults has none to reset to.
+  const formattedDefaults = editorText(defaults) || null
 
   return (
     <div className="json-editor">
@@ -61,7 +63,9 @@ export function JsonEditor({ label, value, onChange, defaults, serverError, disa
           <p className="field-error"><Icon name="alert" />{syntaxError ? `Invalid JSON: ${syntaxError}` : error}</p>
         ) : parsed?.ok ? (
           <p className="json-status"><Icon name="check" />Valid JSON</p>
-        ) : null}
+        ) : (
+          <p className="json-status">Empty — saved with no parameters.</p>
+        )}
       </div>
     </div>
   )

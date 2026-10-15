@@ -1,7 +1,7 @@
 import { useId, useState, type FormEvent } from 'react'
 import { errorDetail, isConflict, type FeatureState } from '../api'
 import type { FeaturesStore } from '../hooks/useFeatures'
-import { compactJson, formatJson, safeParse } from '../json'
+import { editorText, toParameters } from '../json'
 import { Button } from './Button'
 import { Dialog } from './Dialog'
 import { JsonEditor } from './JsonEditor'
@@ -12,24 +12,24 @@ export function AddFilterDialog({ feature, store, onClose }: { feature: FeatureS
   const id = useId()
   const choices = store.availableFilters.filter(a => !feature.filters.some(f => f.filterType === a.name))
   const [filterName, setFilterName] = useState(choices.length === 1 ? choices[0].name : '')
-  const [params, setParams] = useState(() => choices.length === 1 ? formatJson(choices[0].defaultSettings) : '')
+  const [params, setParams] = useState(() => choices.length === 1 ? editorText(choices[0].defaultSettings) : '')
   const [saving, setSaving] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
 
   const selected = choices.find(c => c.name === filterName)
-  const paramsValid = params.trim() !== '' && safeParse(params).ok
+  // A blank editor is valid: the filter is added with null parameters, which the server validates as {}.
+  const parameters = toParameters(params)
 
   const selectFilter = (name: string) => {
     setFilterName(name)
     setServerError(null)
     const filter = choices.find(c => c.name === name)
-    setParams(filter ? formatJson(filter.defaultSettings) : '')
+    setParams(filter ? editorText(filter.defaultSettings) : '')
   }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    const parameters = compactJson(params)
-    if (!selected || parameters === null || saving) return
+    if (!selected || !parameters.ok || saving) return
     // Read the latest stored copy so filters added meanwhile aren't dropped by the whole-feature PUT. The new
     // filter does not depend on the rest of the feature, so this dialog has no older base to keep; the
     // body and the token just have to come from this one copy, so anything newer on the server conflicts.
@@ -38,7 +38,7 @@ export function AddFilterDialog({ feature, store, onClose }: { feature: FeatureS
     setSaving(true)
     setServerError(null)
     try {
-      await store.updateFeature(current, { filters: [...current.filters, { filterType: selected.name, parameters }] }, current.updatedAt ?? null, 'Failed to add filter')
+      await store.updateFeature(current, { filters: [...current.filters, { filterType: selected.name, parameters: parameters.value }] }, current.updatedAt ?? null, 'Failed to add filter')
       toast.success(`${selected.name} filter added to “${feature.name}”`)
       onClose()
     } catch (err) {
@@ -61,7 +61,7 @@ export function AddFilterDialog({ feature, store, onClose }: { feature: FeatureS
       footer={
         <>
           <Button onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="submit" variant="primary" loading={saving} disabled={!selected || !paramsValid || store.isUpdating(feature.name)}>Add filter</Button>
+          <Button type="submit" variant="primary" loading={saving} disabled={!selected || !parameters.ok || store.isUpdating(feature.name)}>Add filter</Button>
         </>
       }
     >
