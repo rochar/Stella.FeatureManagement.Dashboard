@@ -22,16 +22,26 @@ function describeJsonError(text: string, err: unknown): string {
   return `${raw.replace(/\s*in JSON at position \d+.*$/, '')} (line ${before.length}, column ${before[before.length - 1].length + 1})`
 }
 
-/** Pretty-printed JSON, or the input unchanged when it does not parse. */
-export function formatJson(text: string | null | undefined): string {
-  if (!text) return '{}'
+/**
+ * Editor text for stored parameters or a filter's defaults: blank when there are none (null or
+ * whitespace), pretty-printed JSON, or the input unchanged when it does not parse.
+ */
+export function editorText(text: string | null | undefined): string {
+  if (!text?.trim()) return ''
   const parsed = safeParse(text)
   return parsed.ok ? JSON.stringify(parsed.value, null, 2) : text
 }
 
-/** Compact JSON for comparing and storing; null when it does not parse. */
-export function compactJson(text: string | null | undefined): string | null {
-  if (!text) return null
+export type ParametersResult =
+  | { ok: true; value: string | null }
+  | { ok: false }
+
+/**
+ * The parameters to store for editor (or stored) text, also used to compare two of them: null for a blank
+ * or whitespace-only text, compact JSON for valid JSON, and not ok when the text does not parse.
+ */
+export function toParameters(text: string | null | undefined): ParametersResult {
+  if (!text?.trim()) return { ok: true, value: null }
   const parsed = safeParse(text)
-  return parsed.ok ? JSON.stringify(parsed.value) : null
+  return parsed.ok ? { ok: true, value: JSON.stringify(parsed.value) } : { ok: false }
 }

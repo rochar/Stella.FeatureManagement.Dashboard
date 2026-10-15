@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { CHANGED_ELSEWHERE, errorDetail, isConflict, type FeatureFilter, type FeatureState } from '../api'
 import type { FeaturesStore } from '../hooks/useFeatures'
-import { compactJson, formatJson, safeParse } from '../json'
+import { editorText, safeParse, toParameters } from '../json'
 import { Button, IconButton } from './Button'
 import { Icon } from './Icon'
 import { JsonEditor } from './JsonEditor'
@@ -30,7 +30,7 @@ export function FilterCard({ feature, filter, index, defaults, store, onDelete }
 
   const startEditing = () => {
     setBase(store.storedCopy(feature))
-    setDraft(formatJson(filter.parameters))
+    setDraft(editorText(filter.parameters))
     setServerError(null)
   }
 
@@ -51,21 +51,23 @@ export function FilterCard({ feature, filter, index, defaults, store, onDelete }
       return
     }
     setBase(stored)
-    setDraft(formatJson(storedFilter.parameters))
+    setDraft(editorText(storedFilter.parameters))
     setServerError(CHANGED_ELSEWHERE)
   }
 
   const save = async () => {
     if (draft === null || base === null) return
-    const next = compactJson(draft)
-    if (next === null) return
-    // Unchanged: skip the PUT, which would bump UpdatedAt and run OnFeatureChanging.
-    if (next === compactJson(base.filters[index]?.parameters)) { cancel(); return }
+    // A blank editor saves null parameters.
+    const next = toParameters(draft)
+    if (!next.ok) return
+    // Unchanged (null and blank count as equal): skip the PUT, which would bump UpdatedAt and run OnFeatureChanging.
+    const stored = toParameters(base.filters[index]?.parameters)
+    if (stored.ok && stored.value === next.value) { cancel(); return }
 
     setSaving(true)
     setServerError(null)
     try {
-      const filters = base.filters.map((f, i) => i === index ? { filterType: f.filterType, parameters: next } : f)
+      const filters = base.filters.map((f, i) => i === index ? { filterType: f.filterType, parameters: next.value } : f)
       await store.updateFeature(base, { filters }, base.updatedAt ?? null, 'Failed to update filter')
       toast.success(`${filter.filterType} filter updated`)
       setDraft(null)
@@ -78,7 +80,7 @@ export function FilterCard({ feature, filter, index, defaults, store, onDelete }
     }
   }
 
-  const draftInvalid = draft !== null && !safeParse(draft).ok
+  const draftInvalid = draft !== null && !toParameters(draft).ok
 
   return (
     <div className="filter-card">
@@ -116,9 +118,10 @@ export function FilterCard({ feature, filter, index, defaults, store, onDelete }
 }
 
 function FilterParameters({ parameters }: { parameters: string | null }) {
-  if (!parameters) return <p className="filter-params-empty">No parameters.</p>
+  if (!parameters?.trim()) return <p className="filter-params-empty">No parameters.</p>
 
   const parsed = safeParse(parameters)
+  if (parsed.ok && parsed.value === null) return <p className="filter-params-empty">No parameters.</p>
   if (!parsed.ok) {
     return (
       <>

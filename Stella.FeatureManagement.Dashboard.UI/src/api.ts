@@ -17,7 +17,8 @@ export interface FeatureState {
 
 export interface AvailableFilter {
   name: string
-  defaultSettings: string
+  /** JSON that pre-fills the editor; null when the filter was registered without defaults. */
+  defaultSettings: string | null
 }
 
 export type FeatureChanges = Partial<Pick<FeatureState, 'isEnabled' | 'description' | 'filters' | 'application'>>
