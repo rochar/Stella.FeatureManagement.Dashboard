@@ -57,4 +57,16 @@ public class FeatureManagerDashboardBuilder : IFeatureManagerDashboardBuilder
         _filterRepository.AddFilter<T>(defaultSettings);
         return this;
     }
+
+    /// <inheritdoc />
+    public IFeatureManagerDashboardBuilder AddFeatureFilter<TFilter, TSettings>()
+        where TFilter : IFeatureFilterMetadata
+        where TSettings : class
+    {
+        // Repository first: it rejects an unusable settings type, and must do so before the filter is
+        // registered with Microsoft.FeatureManagement, so a rejected call leaves nothing half-registered.
+        _filterRepository.AddFilter<TFilter, TSettings>();
+        _builder.AddFeatureFilter<TFilter>();
+        return this;
+    }
 }

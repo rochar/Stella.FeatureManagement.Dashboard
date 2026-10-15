@@ -100,4 +100,46 @@ public class PostFeaturesEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
 
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
+
+    [Theory]
+    [InlineData("UnmappedMember", "{\"Dummy\":1}", false)]
+    [InlineData("CamelCaseMember", "{\"ids\":[1]}", false)]
+    [InlineData("ValidJson", "{\"Ids\":[1]}", true)]
+    [InlineData("Null", null, true)]
+    // Blank strings stay refused: server validation is unchanged by filters without defaults, so a client
+    // must send null for an empty editor.
+    [InlineData("Blank", "", false)]
+    [InlineData("WhitespaceOnly", "   ", false)]
+    public async Task WhenFilterIsRegisteredWithoutDefaultsItsParametersAreValidatedAgainstItsSettingsType(
+        string parametersCase, string? parameters, bool accepted)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        FeatureFilterDto[] filters = [new("BlankTestFilter", parameters)];
+
+        var postedName = $"BlankPost{parametersCase}_{Guid.NewGuid():N}";
+        var post = await _client.PostAsJsonAsync($"{WebApp.ApiBaseUrl}/features",
+            new { Name = postedName, IsEnabled = true, Filters = filters }, ct);
+        post.StatusCode.ShouldBe(accepted ? HttpStatusCode.Created : HttpStatusCode.BadRequest);
+        (await _store.FindFeatureAsync(postedName, ct) is not null).ShouldBe(accepted);
+
+        var putTarget = await CreateWithoutFiltersAsync($"BlankPut{parametersCase}");
+        var put = await _client.PutAsJsonAsync($"{WebApp.ApiBaseUrl}/features/{putTarget.Name}",
+            new { IsEnabled = true, Filters = filters }, ct);
+        put.StatusCode.ShouldBe(accepted ? HttpStatusCode.OK : HttpStatusCode.BadRequest);
+
+        var storeTarget = await CreateWithoutFiltersAsync($"BlankStore{parametersCase}");
+        var update = await _store.UpdateFeatureAsync(storeTarget with { IsEnabled = true, Filters = [.. filters] }, ct);
+        update.Status.ShouldBe(accepted ? FeatureFlagUpdateStatus.Updated : FeatureFlagUpdateStatus.Rejected);
+        if (!accepted)
+            FeatureFlagStoreTests.ShouldHaveSameState(await _store.FindFeatureAsync(storeTarget.Name, ct), storeTarget);
+    }
+
+    private async Task<FeatureFlagDto> CreateWithoutFiltersAsync(string prefix)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var name = $"{prefix}_{Guid.NewGuid():N}";
+        (await _client.PostAsJsonAsync($"{WebApp.ApiBaseUrl}/features", new { Name = name, IsEnabled = false }, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        return (await _store.FindFeatureAsync(name, ct))!;
+    }
 }
