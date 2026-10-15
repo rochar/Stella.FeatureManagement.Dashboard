@@ -1,4 +1,5 @@
 ﻿using Example.Api.FeatureManager;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using System.Net;
 using System.Net.Http.Json;
@@ -347,6 +348,37 @@ public class PutFeaturesEndPointsTests(WebApp webApp) : IClassFixture<WebApp>
         var body = await response.Content.ReadFromJsonAsync<FeatureStateResponse>(Ct);
         body!.UpdatedAt.ShouldBe(ahead.AddTicks(TimeSpan.TicksPerMicrosecond));
         (await GetAsync(original.Name)).UpdatedAt.ShouldBe(body.UpdatedAt);
+    }
+
+    [Theory]
+    [InlineData("DashboardPut", "BlankTestFilter")]
+    [InlineData("StoreUpdate", "BlankTestFilter")]
+    [InlineData("DashboardPut", "TestFilter")]
+    [InlineData("StoreUpdate", "TestFilter")]
+    public async Task WhenFilterParametersAreClearedToNullTheyAreStoredAsNull(string writeCase, string filterType)
+    {
+        var store = _services.GetRequiredService<IFeatureFlagStore>();
+        var featureName = $"ClearToNull{writeCase}{filterType}_{Guid.NewGuid():N}";
+        (await _client.PostAsJsonAsync($"{WebApp.ApiBaseUrl}/features",
+            new { Name = featureName, IsEnabled = true, Filters = new[] { new FeatureFilterDto(filterType, "{\"Ids\":[3]}") } },
+            Ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        FeatureFilterDto[] cleared = [new(filterType, null)];
+
+        if (writeCase == "DashboardPut")
+        {
+            (await PutAsync(featureName, new { IsEnabled = true, Filters = cleared })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+        else
+        {
+            var current = await store.FindFeatureAsync(featureName, Ct);
+            (await store.UpdateFeatureAsync(current! with { Filters = [.. cleared] }, Ct)).Status
+                .ShouldBe(FeatureFlagUpdateStatus.Updated);
+        }
+
+        var read = await GetAsync(featureName);
+        read.Filters.ShouldHaveSingleItem().ShouldBe(new FeatureFilterResponse(filterType, null));
+        var found = await store.FindFeatureAsync(featureName, Ct);
+        found!.Filters.ShouldNotBeNull().ShouldHaveSingleItem().ShouldBe(new FeatureFilterDto(filterType, null));
     }
 
     private async Task<FeatureStateResponse> CreateAsync(string prefix)

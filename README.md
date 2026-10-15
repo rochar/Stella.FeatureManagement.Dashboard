@@ -105,6 +105,10 @@ GET /features/dashboardapi/usage/{featureName}?days=30
 
 The `/features/{featureName}` endpoint returns a boolean feature state. The `/features/dashboardapi/*` endpoints are used by the dashboard UI for feature management.
 
+`GET /features/dashboardapi/filters` lists the filters the dashboard offers as `[{ "name": "...", "defaultSettings": "..." }]`.
+`defaultSettings` is the registered default as a JSON string, or `null` for a filter registered without
+defaults (see [Custom filters](#7-custom-filters)).
+
 #### Updating a feature: `PUT /features/dashboardapi/features/{featureName}`
 
 The body replaces `isEnabled`, `description`, `filters` and (when sent) `application`. A body that omits
@@ -134,8 +138,8 @@ feature that already has filters, adding another can only widen who gets it.
 
 Filter parameters are validated against the registered filter's settings type on every create and update
 (unknown properties, including wrong casing, are refused). For a registered filter type, `parameters`
-longer than 4000 characters (the column size) are refused with `400`. Null or empty parameters are
-accepted as before.
+longer than 4000 characters (the column size) are refused with `400`. Null parameters are accepted and
+validated as `{}`; an empty or whitespace-only string is not valid JSON and is refused with `400`.
 
 ### 6. Reading and writing features from code: `IFeatureFlagStore`
 
@@ -174,3 +178,31 @@ public sealed class EnableForUser(IFeatureFlagStore store)
   `Filters` must not be null (it throws; pass an empty list to remove every filter on purpose).
 - `ValidateFeature(feature)` runs exactly the validation `UpdateFeatureAsync` runs, as an update, and writes
   nothing.
+
+### 7. Custom filters
+
+Register your own `Microsoft.FeatureManagement` filters on the builder returned by `AddFeaturesDashboard(...)`.
+Either overload registers the filter with `Microsoft.FeatureManagement` and lists it in the dashboard under its
+`FilterAlias` (else its class name), and both validate saved parameters against the settings type:
+
+```csharp
+builder.Services
+    .AddFeaturesDashboard(options => options.UseNpgsql(connectionString))
+    // With defaults: the dashboard pre-fills the editor with them; the settings type is the instance's type.
+    .AddFeatureFilter<TestFilter>(new TestFilterSettings { Ids = [3, 4] })
+    // Without defaults: the dashboard opens a blank editor; parameters are validated against the second type.
+    .AddFeatureFilter<BlankTestFilter, BlankTestFilterSettings>();
+```
+
+- A filter registered without defaults is listed by `GET /features/dashboardapi/filters` with
+  `defaultSettings: null`.
+- In the dashboard, a parameters editor left blank (or holding only whitespace) saves `parameters: null`,
+  for every filter. Null parameters are validated as `{}`, so they pass whenever the settings type has no
+  required members, and the filter receives no configuration: write the filter to treat missing settings
+  as "match nobody" (or whatever empty means for it).
+- The first registration of a filter type wins, whichever overload made it.
+- `TSettings` must be a concrete type: an abstract or interface settings type throws `ArgumentException`
+  at registration, since parameters could never be deserialized into it.
+- `AddFeatureFilter<TFilter, TSettings>()` is a default interface member of `IFeatureManagerDashboardBuilder`
+  that throws `NotSupportedException`; the builder `AddFeaturesDashboard(...)` returns implements it. Only
+  your own implementation of that interface would need to implement it too.

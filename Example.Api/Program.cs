@@ -33,7 +33,8 @@ builder.AddServiceDefaults();
 // Add Feature Management with Dashboard 
 builder.Services
     .AddFeaturesDashboard(options => options.UseNpgsql(builder.Configuration.GetConnectionString("features")))
-    .AddFeatureFilter<TestFilter>(new TestFilterSettings(){Ids = [3, 4]});
+    .AddFeatureFilter<TestFilter>(new TestFilterSettings() { Ids = [3, 4] })
+    .AddFeatureFilter<BlankTestFilter, BlankTestFilterSettings>();
 
 
 var app = builder.Build();

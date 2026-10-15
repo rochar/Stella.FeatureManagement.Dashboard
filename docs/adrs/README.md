@@ -40,3 +40,4 @@ characters.
 - ADR-20261006-dependency-free-dashboard-ui — accepted — UI stays react-only; token CSS with dark mode; own primitives
 - ADR-20261006-usage-read-api-and-index — accepted — serve usage from its own endpoint; index Date, non-covering
 - ADR-20261014-optimistic-concurrency-writes — accepted — one FeatureFlagUpdater; UpdatedAt is the concurrency token
+- ADR-20261015-filters-without-defaults — accepted — no-default filters via a default builder interface member

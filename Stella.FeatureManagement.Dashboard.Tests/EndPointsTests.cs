@@ -114,4 +114,30 @@ public class GetFeaturesEndPointTests(WebApp webApp) : IClassFixture<WebApp>
         var definition = await _definitionProvider.GetFeatureDefinitionAsync(featureName);
         definition!.RequirementType.ShouldBe(RequirementType.Any);
     }
+
+    [Theory]
+    [InlineData("MatchingId", "{\"Ids\":[3]}", 3, true)]
+    [InlineData("NonMatchingId", "{\"Ids\":[3]}", 4, false)]
+    [InlineData("NullParameters", null, 3, false)]
+    public async Task WhenFilterIsRegisteredWithoutDefaultsFeatureManagementEvaluatesIt(
+        string evaluationCase, string? parameters, int id, bool expected)
+    {
+        // The flag holds only BlankTestFilter, so its answer is the filter's: Microsoft.FeatureManagement would
+        // throw for an unregistered filter rather than answer false.
+        var ct = TestContext.Current.CancellationToken;
+        var featureName = $"BlankEvaluation{evaluationCase}_{Guid.NewGuid():N}";
+        (await _client.PostAsJsonAsync($"{WebApp.ApiBaseUrl}/features",
+            new
+            {
+                Name = featureName,
+                IsEnabled = true,
+                Filters = new[] { new FeatureFilterDto("BlankTestFilter", parameters) }
+            }, ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var response = await _client.GetAsync($"features/{featureName}?id={id}", ct);
+
+        // An exception during evaluation would fail the request instead of answering false.
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        bool.Parse(await response.Content.ReadAsStringAsync(ct)).ShouldBe(expected);
+    }
 }
